@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TaskScheduler.Desktop.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:u="https://irihi.tech/ursa"
+        xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="TaskScheduler.Desktop.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/logo.ico"
+        Title="TaskScheduler.Desktop"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <DockPanel Margin="10">
+        <StackPanel Height="30" DockPanel.Dock="Top">
+            <u:ButtonGroup>
+                <Button Command="{Binding HandleToolBarItemCommand}"
+                        CommandParameter="新建">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <avalonia:MaterialIcon Kind="TimerAddOutline" />
+                            <TextBlock Text="新建" />
+                        </StackPanel>
+                    </Button.Content>
+                </Button>
+
+                <Button Command="{Binding HandleToolBarItemCommand}"
+                        CommandParameter="编辑">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <avalonia:MaterialIcon Kind="TimerEditOutline" />
+                            <TextBlock Text="编辑" />
+                        </StackPanel>
+                    </Button.Content>
+                </Button>
+
+                <Button Command="{Binding HandleToolBarItemCommand}"
+                        CommandParameter="删除">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <avalonia:MaterialIcon Kind="TimerRemoveOutline" Foreground="Red" />
+                            <TextBlock Text="删除" />
+                        </StackPanel>
+                    </Button.Content>
+                </Button>
+
+                <Button Command="{Binding HandleToolBarItemCommand}"
+                        CommandParameter="运行">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <avalonia:MaterialIcon Kind="ArrowRightDropCircleOutline" Foreground="LimeGreen" />
+                            <TextBlock Text="运行" />
+                        </StackPanel>
+                    </Button.Content>
+                </Button>
+                <Button Command="{Binding HandleToolBarItemCommand}"
+                        CommandParameter="导入">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <avalonia:MaterialIcon Kind="Import" />
+                            <TextBlock Text="导入" />
+                        </StackPanel>
+                    </Button.Content>
+                </Button>
+
+                <Button Command="{Binding HandleToolBarItemCommand}"
+                        CommandParameter="导出">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <avalonia:MaterialIcon Kind="Export" />
+                            <TextBlock Text="导出" />
+                        </StackPanel>
+                    </Button.Content>
+                </Button>
+            </u:ButtonGroup>
+        </StackPanel>
+        <Grid>
+        </Grid>
+    </DockPanel>
+</Window>
