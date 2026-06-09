@@ -1,9 +1,10 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ursa="https://irihi.tech/ursa/themes/semi"
              xmlns:semi="https://irihi.tech/semi"
-             x:Class="TaskScheduler.Desktop.App"
-             xmlns:local="using:TaskScheduler.Desktop"
+             x:Class="TaskScheduler.App.App"
+             xmlns:local="using:TaskScheduler.App"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:views="using:TaskScheduler.App.Views"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              RequestedThemeVariant="Default">
     <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
@@ -12,10 +13,29 @@
         <local:ViewLocator />
     </Application.DataTemplates>
 
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="DialogOverlayColor">#80000000</Color>
+                    <SolidColorBrush x:Key="DialogOverlayBrush" Color="#80000000" />
+                    <SolidColorBrush x:Key="DialogPanelBackgroundBrush" Color="#FFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="DialogOverlayColor">#B3000000</Color>
+                    <SolidColorBrush x:Key="DialogOverlayBrush" Color="#B3000000" />
+                    <SolidColorBrush x:Key="DialogPanelBackgroundBrush" Color="#2D2D30" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <semi:SemiTheme Locale="zh-CN" />
-        <ursa:SemiTheme Locale="zh-CN" />
+        <semi:UrsaSemiTheme Locale="zh-CN" />
 
         <avalonia:MaterialIconStyles />
+
+        <semi:DataGridSemiTheme />
     </Application.Styles>
 </Application>

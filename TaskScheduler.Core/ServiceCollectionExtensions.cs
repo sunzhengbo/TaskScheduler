@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
+
+using TaskScheduler.Core.Services;
 
 namespace TaskScheduler.Core;
 
@@ -8,42 +10,43 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddTaskScheduler(this IServiceCollection services, IConfiguration configuration)
     {
-        // if you are using persistent job store, you might want to alter some options
         services.Configure<QuartzOptions>(options =>
         {
             options.Scheduling.IgnoreDuplicates = true; // default: false
             options.Scheduling.OverWriteExistingData = true; // default: true
-            configuration.GetSection("Quartz").Bind(options); // base configuration from appsettings.json
         });
 
+        // 解析 SQLite 连接字符串（复用 DatabaseProvider 的逻辑）
+        var dbProvider = new DatabaseProvider(configuration);
+        var connectionString = dbProvider.ConnectionString;
+
+        // 配置 Quartz 使用 SQLite ADO JobStore 实现任务持久化
         services.AddQuartz(q =>
         {
-            q.UsePersistentStore(s =>
+            q.UsePersistentStore(store =>
             {
-                s.PerformSchemaValidation = true; // default
-                s.UseProperties = true; // preferred, but not default
-                s.RetryInterval = TimeSpan.FromSeconds(15);
-                s.UseSQLite(options =>
+                store.UseProperties = true;
+                store.RetryInterval = TimeSpan.FromSeconds(15);
+                store.UseGenericDatabase("SQLite-Microsoft", db =>
                 {
-                    options.ConnectionString = "some connection string";
-                    // this is the default
-                    options.TablePrefix = "QRTZ_";
+                    db.ConnectionString = connectionString;
                 });
-                s.UseSystemTextJsonSerializer();
-                s.UseClustering(c =>
-                {
-                    c.CheckinMisfireThreshold = TimeSpan.FromSeconds(20);
-                    c.CheckinInterval = TimeSpan.FromSeconds(10);
-                });
+                store.UseSystemTextJsonSerializer();
             });
         });
 
-        // Quartz.Extensions.Hosting allows you to fire background service that handles scheduler lifecycle
-        services.AddQuartzHostedService(options =>
+        services.AddSingleton<IScheduler>(sp =>
         {
-            // when shutting down we want jobs to complete gracefully
-            options.WaitForJobsToComplete = true;
+            var factory = sp.GetRequiredService<ISchedulerFactory>();
+            return Task.Run(() => factory.GetScheduler()).GetAwaiter().GetResult();
         });
+
+        services.AddSingleton<ITaskSchedulerService, TaskSchedulerService>();
+        services.AddSingleton(dbProvider);
+        services.AddSingleton<IExecutionLogService, ExecutionLogService>();
+        services.AddSingleton<IToolConfigService, ToolConfigService>();
+        services.AddSingleton<ISettingsService, SettingsService>();
+
         return services;
     }
 }

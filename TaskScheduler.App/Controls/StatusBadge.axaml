@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:TaskScheduler.App.Controls"
+             x:Class="TaskScheduler.App.Controls.StatusBadge">
+    <Border x:Name="BadgeBorder"
+            CornerRadius="9999" Padding="6,2"
+            HorizontalAlignment="Left">
+        <TextBlock x:Name="TextBlock"
+                   Text="{Binding Text, RelativeSource={RelativeSource AncestorType=local:StatusBadge}}"
+                   FontFamily="Consolas,Courier New,monospace" FontSize="12" FontWeight="SemiBold" />
+    </Border>
+</UserControl>

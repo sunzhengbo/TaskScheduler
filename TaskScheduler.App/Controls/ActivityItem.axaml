@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:TaskScheduler.App.Controls"
+             x:Class="TaskScheduler.App.Controls.ActivityItem">
+    <Border Padding="20,12"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+            BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+            <!-- 状态徽章 -->
+            <Border Grid.Column="0" x:Name="BadgeBorder"
+                    CornerRadius="12" Padding="8,3" Margin="0,0,12,0"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Border x:Name="BadgeDot" Width="6" Height="6" CornerRadius="3"
+                            VerticalAlignment="Center" />
+                    <TextBlock x:Name="BadgeText" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <!-- 任务信息 -->
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="{Binding ActivityName, RelativeSource={RelativeSource AncestorType=local:ActivityItem}}"
+                           FontWeight="Medium" FontSize="14" />
+                <TextBlock Text="{Binding Detail, RelativeSource={RelativeSource AncestorType=local:ActivityItem}}"
+                           FontSize="12"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <!-- 时间 -->
+            <TextBlock Grid.Column="2"
+                       Text="{Binding TimeAgo, RelativeSource={RelativeSource AncestorType=local:ActivityItem}}"
+                       FontFamily="Consolas,Courier New,monospace" FontSize="12"
+                       VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:controls="using:TaskScheduler.App.Controls"
+             xmlns:models="using:TaskScheduler.Core.Models"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="TaskScheduler.App.Views.ExecutionLogView"
+             x:DataType="vm:ExecutionLogViewModel"
+             Loaded="ExecutionLogView_OnLoaded">
+    <Grid ColumnDefinitions="520,*">
+        <!-- 左面板：筛选 + 日志列表 -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <!-- 筛选 Chips -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="12,10,12,10">
+                    <Button Content="全部" Command="{Binding FilterCommand}" CommandParameter="全部"
+                            Classes="Flat" Padding="10,4" FontSize="12" />
+                    <Button Content="成功" Command="{Binding FilterCommand}" CommandParameter="Success"
+                            Classes="Flat" Padding="10,4" FontSize="12" />
+                    <Button Content="失败" Command="{Binding FilterCommand}" CommandParameter="Failed"
+                            Classes="Flat" Padding="10,4" FontSize="12" />
+                    <Button Content="超时" Command="{Binding FilterCommand}" CommandParameter="Timeout"
+                            Classes="Flat" Padding="10,4" FontSize="12" />
+                    <Button Content="取消" Command="{Binding FilterCommand}" CommandParameter="Cancelled"
+                            Classes="Flat" Padding="10,4" FontSize="12" />
+                </StackPanel>
+
+                <!-- 日志列表 -->
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding LogEntries}"
+                         SelectedItem="{Binding SelectedLog}"
+                         SelectionChanged="LogList_OnSelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:ExecutionLog">
+                            <StackPanel Margin="12,6" Spacing="4">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding JobName}" FontWeight="SemiBold" FontSize="14"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding StartTime, StringFormat='{}{0:HH:mm:ss}'}"
+                                               FontSize="12"
+                                               FontFamily="Consolas,Courier New,monospace"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <controls:StatusBadge Text="{Binding Status}" Status="{Binding Status}" />
+                                    <TextBlock Text="{Binding DurationDisplay}"
+                                               FontSize="12"
+                                               FontFamily="Consolas,Courier New,monospace"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Remark}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="300"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- 分页 -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8"
+                            HorizontalAlignment="Center" Margin="0,8,0,8">
+                    <Button Content="上一页" Command="{Binding PrevPageCommand}" Classes="Flat" FontSize="13" />
+                    <TextBlock VerticalAlignment="Center" FontSize="13">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="第 {0} / {1} 页">
+                                <Binding Path="CurrentPage" />
+                                <Binding Path="TotalPages" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <Button Content="下一页" Command="{Binding NextPageCommand}" Classes="Flat" FontSize="13" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 右面板：终端输出 (edge-to-edge dark terminal) -->
+        <Border Grid.Column="1" Background="#0d1117">
+            <DockPanel>
+                <!-- Terminal Header -->
+                <Border DockPanel.Dock="Top" Padding="16,10"
+                        Background="#161b22"
+                        BorderBrush="#30363d"
+                        BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding TerminalTitle}"
+                                   FontFamily="Consolas,Courier New,monospace"
+                                   FontSize="14" Foreground="#8b949e"
+                                   VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                            <Button Content="复制" Command="{Binding CopyLogCommand}"
+                                    Classes="Flat" Padding="10,4" FontSize="12"
+                                    Foreground="#8b949e" />
+                            <Button Content="导出" Command="{Binding ExportLogCommand}"
+                                    Classes="Flat" Padding="10,4" FontSize="12"
+                                    Foreground="#8b949e" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <!-- Terminal Body -->
+                <controls:TerminalPanel Lines="{Binding TerminalLines}" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

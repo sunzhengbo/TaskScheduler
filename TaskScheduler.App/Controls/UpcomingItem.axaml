@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:TaskScheduler.App.Controls"
+             x:Class="TaskScheduler.App.Controls.UpcomingItem">
+    <Border Padding="20,12"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+            BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+            <!-- 状态指示点 -->
+            <Border Grid.Column="0" x:Name="DotBorder" Width="8" Height="8"
+                    CornerRadius="4" Margin="0,0,12,0"
+                    VerticalAlignment="Center"
+                    Background="#17A34A" />
+            <!-- 任务信息 -->
+            <StackPanel Grid.Column="1" Spacing="2">
+                <TextBlock Text="{Binding ItemName, RelativeSource={RelativeSource AncestorType=local:UpcomingItem}}"
+                           FontWeight="Medium" FontSize="14" />
+                <TextBlock Text="{Binding Description, RelativeSource={RelativeSource AncestorType=local:UpcomingItem}}"
+                           FontSize="12"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <!-- 时间右对齐 -->
+            <TextBlock Grid.Column="2"
+                       Text="{Binding TimeText, RelativeSource={RelativeSource AncestorType=local:UpcomingItem}}"
+                       FontFamily="Consolas,Courier New,monospace" FontSize="12"
+                       VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+</UserControl>

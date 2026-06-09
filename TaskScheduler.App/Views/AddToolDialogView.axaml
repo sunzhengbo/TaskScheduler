@@ -1,0 +1,83 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="560"
+             x:Class="TaskScheduler.App.Views.AddToolDialogView"
+             x:DataType="vm:SettingsViewModel">
+    <Border Background="{DynamicResource DialogOverlayBrush}"
+            IsVisible="{Binding IsAddToolDialogOpen}">
+        <Border Background="{DynamicResource DialogPanelBackgroundBrush}"
+                CornerRadius="12" Padding="0"
+                Width="520" MaxHeight="560"
+                VerticalAlignment="Center" HorizontalAlignment="Center">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Padding="20,16"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="添加解释器工具" FontSize="16" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Command="{Binding CloseAddToolCommand}"
+                                Width="28" Height="28" CornerRadius="8"
+                                Background="Transparent" BorderThickness="0"
+                                Cursor="Hand" Padding="0">
+                            <avalonia:MaterialIcon Kind="Close" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                </Border>
+                <Border DockPanel.Dock="Bottom" Padding="16,12"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="0,1,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <Button Content="取消" Command="{Binding CloseAddToolCommand}"
+                                Classes="flatBtn" Padding="12,6"
+                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                BorderThickness="1" />
+                        <Button Content="添加" Command="{Binding AddToolCommand}"
+                                Background="{DynamicResource SystemControlHighlightAccentBrush}"
+                                Foreground="White" Padding="12,6" CornerRadius="8"
+                                BorderThickness="0" Cursor="Hand" />
+                    </StackPanel>
+                </Border>
+                <ScrollViewer>
+                    <StackPanel Spacing="12" Margin="20,16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="工具类型" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <ComboBox ItemsSource="{Binding ToolTypes}" SelectedItem="{Binding NewToolType}"
+                                      Width="280" HorizontalAlignment="Left" />
+                            <TextBlock Text="选择解释器类型"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="版本名称" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBox Text="{Binding NewToolVersion}" Watermark="如: python3.12"
+                                     FontFamily="Consolas,Courier New,monospace" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="可执行文件路径" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBox Text="{Binding NewToolPath}" Watermark="如: /usr/bin/python3.12"
+                                     FontFamily="Consolas,Courier New,monospace" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="环境变量（可选）" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBox Text="{Binding NewToolEnvVariables}"
+                                     Watermark="如: PYTHONPATH=/opt/lib;PATH=/opt/bin"
+                                     FontFamily="Consolas,Courier New,monospace" />
+                            <TextBlock Text="用分号分隔多个环境变量，执行任务时会注入到进程中"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Border>
+</UserControl>

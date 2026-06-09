@@ -1,0 +1,220 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:controls="using:TaskScheduler.App.Controls"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:converters="using:TaskScheduler.App.Converters"
+             xmlns:models="using:TaskScheduler.Core.Models"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="TaskScheduler.App.Views.TaskListView"
+             x:DataType="vm:TaskListViewModel"
+             Loaded="TaskListView_OnLoaded">
+
+    <UserControl.Resources>
+        <converters:TriggerStateToBadgeStatusConverter x:Key="TriggerStateToBadgeStatus" />
+        <converters:TriggerStateToDisplayConverter x:Key="TriggerStateToDisplay" />
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- Filter Toolbar -->
+        <Border Grid.Row="0" Margin="0,8,16,0"
+                Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                CornerRadius="12,12,0,0"
+                Padding="20,12"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="1,1,1,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center">
+                        <Run Text="全部任务 · " />
+                        <Run Text="{Binding FilteredTasks.Count}" />
+                    </TextBlock>
+                    <TextBox Width="200" Watermark="搜索任务名称..."
+                             Text="{Binding SearchText}"
+                             FontSize="13" Padding="8,4" />
+                    <ComboBox ItemsSource="{Binding FilterOptions}"
+                              SelectedItem="{Binding SelectedFilter}"
+                              FontSize="13" MinWidth="90" Padding="8,4">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:TriggerState">
+                                <TextBlock Text="{Binding Converter={StaticResource TriggerStateToDisplay}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <Button Classes="Flat" Padding="6" Foreground="#FF9800"
+                            Command="{Binding PauseTaskCommand}"
+                            IsEnabled="{Binding SelectedTask, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Pause" Width="16" Height="16" />
+                            <TextBlock Text="暂停" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="Flat" Padding="6" Foreground="#2196F3"
+                            Command="{Binding ResumeTaskCommand}"
+                            IsEnabled="{Binding SelectedTask, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Replay" Width="16" Height="16" />
+                            <TextBlock Text="恢复" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="Flat" Padding="6"
+                            Command="{Binding DeleteTaskCommand}"
+                            IsEnabled="{Binding SelectedTask, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            Foreground="#FF0000">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Delete" Width="16" Height="16" />
+                            <TextBlock Text="删除" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="Flat" Padding="6"
+                            Command="{Binding CopyTaskCommand}"
+                            CommandParameter="{Binding SelectedTask}"
+                            IsEnabled="{Binding SelectedTask, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="ContentCopy" Width="16" Height="16" />
+                            <TextBlock Text="复制" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="Flat" Padding="6"
+                            Command="{Binding ExportTaskCommand}"
+                            CommandParameter="{Binding SelectedTask}"
+                            IsEnabled="{Binding SelectedTask, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Export" Width="16" Height="16" />
+                            <TextBlock Text="导出" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- DataGrid -->
+        <Border Grid.Row="1" Margin="16,0,16,16"
+                CornerRadius="0,0,12,12"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="1,0,1,1">
+            <DataGrid x:Name="TaskDataGrid"
+                      ItemsSource="{Binding FilteredTasks}"
+                      SelectedItem="{Binding SelectedTask}"
+                      AutoGenerateColumns="False"
+                      CanUserReorderColumns="False"
+                      CanUserResizeColumns="True"
+                      CanUserSortColumns="False"
+                      IsReadOnly="True"
+                      SelectionMode="Single"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      DoubleTapped="TaskDataGrid_OnDoubleTapped">
+                <DataGrid.Columns>
+                    <!-- 任务名称 -->
+                    <DataGridTemplateColumn Header="任务名称" Width="*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           FontSize="13" TextTrimming="CharacterEllipsis" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 分组 -->
+                    <DataGridTemplateColumn Header="分组" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <controls:StatusBadge Text="{Binding Group}" Status="Normal"
+                                                      VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 触发器 -->
+                    <DataGridTemplateColumn Header="触发器" Width="140">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <TextBlock Text="{Binding Triggers[0].TriggerDisplay}"
+                                           FontFamily="Consolas,Courier New,monospace"
+                                           FontSize="12" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 状态 -->
+                    <DataGridTemplateColumn Header="状态" Width="80">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <controls:StatusBadge
+                                    Text="{Binding Triggers[0].State, Converter={StaticResource TriggerStateToDisplay}}"
+                                    Status="{Binding Triggers[0].State, Converter={StaticResource TriggerStateToBadgeStatus}}"
+                                    VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+
+                    <!-- 下次执行 -->
+                    <DataGridTemplateColumn Header="下次执行" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <TextBlock
+                                    Text="{Binding Triggers[0].NextFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                    FontFamily="Consolas,Courier New,monospace"
+                                    FontSize="12" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                    Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 上次执行 -->
+                    <DataGridTemplateColumn Header="上次执行" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <TextBlock
+                                    Text="{Binding Triggers[0].PreviousFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                    FontFamily="Consolas,Courier New,monospace"
+                                    FontSize="12" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                    Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 操作 -->
+                    <DataGridTemplateColumn Header="操作" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="4,0">
+                                    <Button Classes="Flat" Padding="4" Foreground="#4CAF50"
+                                            ToolTip.Tip="立即执行"
+                                            Command="{Binding $parent[DataGrid].((vm:TaskListViewModel)DataContext).RunNowTaskCommand}"
+                                            CommandParameter="{Binding}">
+                                        <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" />
+                                    </Button>
+                                    <Button Classes="Flat" Padding="4"
+                                            ToolTip.Tip="编辑"
+                                            Command="{Binding $parent[DataGrid].((vm:TaskListViewModel)DataContext).EditTaskItemCommand}"
+                                            CommandParameter="{Binding}">
+                                        <avalonia:MaterialIcon Kind="Pencil" Width="16" Height="16" />
+                                    </Button>
+                                    <Button Classes="Flat" Padding="4"
+                                            ToolTip.Tip="详情"
+                                            Command="{Binding $parent[DataGrid].((vm:TaskListViewModel)DataContext).ViewDetailTaskCommand}"
+                                            CommandParameter="{Binding}">
+                                        <avalonia:MaterialIcon Kind="OpenInNew" Width="16" Height="16" />
+                                    </Button>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+
+    </Grid>
+</UserControl>

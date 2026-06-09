@@ -1,0 +1,123 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:conv="using:TaskScheduler.App.Converters"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:models="using:TaskScheduler.Core.Models"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="TaskScheduler.App.Views.SettingsToolPanelView"
+             x:DataType="vm:SettingsViewModel">
+    <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            CornerRadius="12" Padding="20"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+            BorderThickness="1">
+        <StackPanel Spacing="16">
+            <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                    BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,4">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Text="解释器工具" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="配置不同版本的解释器，任务可通过名称引用"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="flatBtn" Padding="10,6"
+                            Command="{Binding OpenAddToolCommand}"
+                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="1" FontSize="12">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Plus" Width="14" Height="14" />
+                            <TextBlock Text="添加工具" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+            <ItemsControl ItemsSource="{Binding ToolGroups}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="2" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ToolGroupItem">
+                        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="16" Margin="4">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                        <Border CornerRadius="6" Width="28" Height="28"
+                                                Background="{Binding IconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, ConverterParameter=0.15, FallbackValue=#263776ab}">
+                                            <TextBlock Text="{Binding Icon}"
+                                                       FontFamily="Consolas,Courier New,monospace"
+                                                       FontSize="11" FontWeight="Bold"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{Binding IconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, FallbackValue=#3776ab}" />
+                                        </Border>
+                                        <TextBlock Text="{Binding ToolType}" FontWeight="SemiBold"
+                                                   FontSize="14" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Classes="flatBtn" Padding="8,2"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).EditToolCommand}"
+                                            CommandParameter="{Binding ToolType}"
+                                            Cursor="Hand">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <avalonia:MaterialIcon Kind="PencilOutline" Width="14" Height="14" />
+                                            <TextBlock Text="编辑" FontSize="12" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Versions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:ToolConfig">
+                                            <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                                    CornerRadius="6" Padding="10,6" Margin="0,2">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <StackPanel Grid.Column="0" Spacing="1">
+                                                            <TextBlock FontFamily="Consolas,Courier New,monospace"
+                                                                       FontSize="12" FontWeight="Medium">
+                                                                <TextBlock.Text>
+                                                                    <MultiBinding StringFormat="{}{0} | {1}">
+                                                                        <Binding Path="ToolType" />
+                                                                        <Binding Path="VersionName" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding ExecutablePath}"
+                                                                       FontFamily="Consolas,Courier New,monospace"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       MaxWidth="240"
+                                                                       HorizontalAlignment="Left" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                                                    VerticalAlignment="Center">
+                                                            <TextBlock Text="默认"
+                                                                       FontFamily="Consolas,Courier New,monospace"
+                                                                       FontSize="10"
+                                                                       Foreground="{DynamicResource SystemAccentColor}"
+                                                                       IsVisible="{Binding IsDefault}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Classes="dashedBtn" Margin="0,4,0,0"
+                                        Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenAddToolForGroupCommand}"
+                                        CommandParameter="{Binding ToolType}">
+                                    <TextBlock Text="+ 添加版本" FontSize="12"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:controls="using:TaskScheduler.App.Controls"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="TaskScheduler.App.Views.DashboardView"
+             x:DataType="vm:DashboardViewModel"
+             Loaded="DashboardView_OnLoaded">
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="20">
+            <!-- 统计卡片行 -->
+            <UniformGrid Columns="4">
+                <controls:StatCard Label="全部任务" Value="{Binding TotalCount}" Sub="{Binding TotalCount, StringFormat='共 {0} 个任务'}" />
+                <controls:StatCard Label="运行中" Value="{Binding RunningCount}" Sub="{Binding RunningSub}" />
+                <controls:StatCard Label="已暂停" Value="{Binding PausedCount}" Sub="{Binding PausedSub}" />
+                <controls:StatCard Label="失败" Value="{Binding FailedCount}" Sub="{Binding FailedSub}" />
+            </UniformGrid>
+
+            <!-- 两列布局 -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                <!-- 即将执行 -->
+                <controls:DashboardPanel Grid.Column="0" Header="即将执行">
+                    <controls:DashboardPanel.PanelContent>
+                        <Panel Margin="0,4">
+                            <ItemsControl ItemsSource="{Binding UpcomingTasks}"
+                                          IsVisible="{Binding HasUpcomingTasks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:UpcomingTaskItem">
+                                        <controls:UpcomingItem ItemName="{Binding Name}"
+                                                               Description="{Binding Description}"
+                                                               TimeText="{Binding TimeText}"
+                                                               Status="{Binding Status}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="暂无即将执行的任务"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       FontSize="13" Margin="20,12"
+                                       IsVisible="{Binding !HasUpcomingTasks}" />
+                        </Panel>
+                    </controls:DashboardPanel.PanelContent>
+                </controls:DashboardPanel>
+
+                <!-- 最近活动 -->
+                <controls:DashboardPanel Grid.Column="1" Header="最近活动">
+                    <controls:DashboardPanel.PanelContent>
+                        <Panel Margin="0,4">
+                            <ItemsControl ItemsSource="{Binding RecentActivities}"
+                                          IsVisible="{Binding HasRecentActivities}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RecentActivityItem">
+                                        <controls:ActivityItem ActivityName="{Binding Name}"
+                                                               Detail="{Binding Detail}"
+                                                               TimeAgo="{Binding TimeAgo}"
+                                                               ActivityStatus="{Binding Status}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="暂无最近活动记录"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       FontSize="13" Margin="20,12"
+                                       IsVisible="{Binding !HasRecentActivities}" />
+                        </Panel>
+                    </controls:DashboardPanel.PanelContent>
+                </controls:DashboardPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

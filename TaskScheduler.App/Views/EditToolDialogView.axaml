@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:conv="using:TaskScheduler.App.Converters"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:models="using:TaskScheduler.Core.Models"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="640"
+             x:Class="TaskScheduler.App.Views.EditToolDialogView"
+             x:DataType="vm:SettingsViewModel">
+    <Border Background="{DynamicResource DialogOverlayBrush}"
+            IsVisible="{Binding IsEditToolDialogOpen}">
+        <Border Background="{DynamicResource DialogPanelBackgroundBrush}"
+                CornerRadius="12" Padding="0"
+                Width="560" MaxHeight="640"
+                VerticalAlignment="Center" HorizontalAlignment="Center">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Padding="20,16"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <Border CornerRadius="6" Width="28" Height="28"
+                                    Background="{Binding EditToolIconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, ConverterParameter=0.15, FallbackValue=#263776ab}">
+                                <TextBlock Text="{Binding EditToolIcon}"
+                                           FontFamily="Consolas,Courier New,monospace"
+                                           FontSize="11" FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="{Binding EditToolIconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, FallbackValue=#3776ab}" />
+                            </Border>
+                            <TextBlock Text="编辑工具" FontSize="16" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding EditToolType}" FontSize="14"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Command="{Binding CloseEditToolCommand}"
+                                Width="28" Height="28" CornerRadius="8"
+                                Background="Transparent" BorderThickness="0"
+                                Cursor="Hand" Padding="0">
+                            <avalonia:MaterialIcon Kind="Close" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                </Border>
+                <Border DockPanel.Dock="Bottom" Padding="16,12"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="0,1,0,0">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding SaveStatusMessage}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SystemAccentColor}"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Content="关闭" Command="{Binding CloseEditToolCommand}"
+                                Classes="flatBtn" Padding="12,6"
+                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                BorderThickness="1" />
+                    </Grid>
+                </Border>
+                <ScrollViewer>
+                    <StackPanel Spacing="16" Margin="20,16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="已配置版本" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <ItemsControl ItemsSource="{Binding EditingVersions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:ToolConfig">
+                                        <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                                CornerRadius="8" Padding="12" Margin="0,2"
+                                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                                BorderThickness="1">
+                                            <StackPanel Spacing="8">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="{Binding ToolType}" FontSize="13" FontWeight="SemiBold"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                                        <Border CornerRadius="9999" Padding="6,1"
+                                                                VerticalAlignment="Center"
+                                                                IsVisible="{Binding IsDefault}">
+                                                            <Border.Background>
+                                                                <SolidColorBrush Color="{DynamicResource SystemAccentColor}" Opacity="0.15" />
+                                                            </Border.Background>
+                                                            <TextBlock Text="默认" FontSize="10"
+                                                                       FontFamily="Consolas,Courier New,monospace"
+                                                                       Foreground="{DynamicResource SystemAccentColor}" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                                                VerticalAlignment="Center">
+                                                        <Button Classes="flatBtn" Padding="6,2" FontSize="12"
+                                                                Cursor="Hand"
+                                                                 IsEnabled="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).IsSaving, Converter={x:Static conv:BoolConverters.Not}}"
+                                                                Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).EditSaveVersionCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                                                <avalonia:MaterialIcon Kind="ContentSaveOutline" Width="12" Height="12" />
+                                                                <TextBlock Text="保存" FontSize="12"
+                                                                            IsVisible="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).IsSaving, Converter={x:Static conv:BoolConverters.Not}}" />
+                                                                <TextBlock Text="保存中..." FontSize="12"
+                                                                           IsVisible="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).IsSaving}" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                    <Button Classes="flatBtn" Padding="6,2" FontSize="12"
+                                                            Foreground="#d32f2f"
+                                                            Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).EditDeleteVersionCommand}"
+                                                            CommandParameter="{Binding}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                                            <avalonia:MaterialIcon Kind="Delete" Width="12" Height="12" />
+                                                            <TextBlock Text="删除" FontSize="12" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="版本名称" FontSize="11"
+                                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                                    <TextBox Text="{Binding VersionName, Mode=TwoWay}"
+                                                             FontFamily="Consolas,Courier New,monospace"
+                                                             FontSize="13" />
+                                                </StackPanel>
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="可执行文件路径" FontSize="11"
+                                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                                    <TextBox Text="{Binding ExecutablePath, Mode=TwoWay}"
+                                                             FontFamily="Consolas,Courier New,monospace"
+                                                             FontSize="13" />
+                                                </StackPanel>
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="环境变量" FontSize="11"
+                                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                                    <TextBox Text="{Binding EnvVariables, Mode=TwoWay}"
+                                                             Watermark="可选，用分号分隔"
+                                                             FontFamily="Consolas,Courier New,monospace"
+                                                             FontSize="12" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border IsVisible="{Binding EditingVersions.Count, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}"
+                                    Padding="16" CornerRadius="8"
+                                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                    BorderThickness="1"
+                                    Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+                                <TextBlock Text="暂无已配置版本"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                           HorizontalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Border>
+</UserControl>

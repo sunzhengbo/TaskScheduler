@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:models="using:TaskScheduler.Core.Models"
+             xmlns:conv="using:TaskScheduler.App.Converters"
+             xmlns:views="using:TaskScheduler.App.Views"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="TaskScheduler.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel"
+             Loaded="SettingsView_OnLoaded">
+
+    <UserControl.Styles>
+        <Style Selector="Button.settingsNav">
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style Selector="Button.settingsNav:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+        </Style>
+
+        <Style Selector="Button.dashedBtn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.dashedBtn:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}" />
+        </Style>
+
+        <Style Selector="Button.flatBtn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.flatBtn:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="200,*">
+        <!-- 子导航 -->
+        <Border Grid.Column="0" Padding="8"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="0,0,1,0">
+            <StackPanel Spacing="2" Margin="0,4">
+                <Button Content="工具配置" Command="{Binding SelectTabCommand}" CommandParameter="0"
+                        Classes="settingsNav"
+                        Background="{Binding SelectedTab, Converter={x:Static conv:IntEqualToBrushConverter.Instance}, ConverterParameter=0}"
+                        FontWeight="{Binding SelectedTab, Converter={x:Static conv:IntEqualFontWeightConverter.Instance}, ConverterParameter=0, FallbackValue=Normal}" />
+                <Button Content="调度引擎" Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Classes="settingsNav"
+                        Background="{Binding SelectedTab, Converter={x:Static conv:IntEqualToBrushConverter.Instance}, ConverterParameter=1}"
+                        FontWeight="{Binding SelectedTab, Converter={x:Static conv:IntEqualFontWeightConverter.Instance}, ConverterParameter=1, FallbackValue=Normal}" />
+                <Button Content="外观设置" Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Classes="settingsNav"
+                        Background="{Binding SelectedTab, Converter={x:Static conv:IntEqualToBrushConverter.Instance}, ConverterParameter=2}"
+                        FontWeight="{Binding SelectedTab, Converter={x:Static conv:IntEqualFontWeightConverter.Instance}, ConverterParameter=2, FallbackValue=Normal}" />
+            </StackPanel>
+        </Border>
+
+        <!-- 内容区 -->
+        <ScrollViewer Grid.Column="1" Padding="24">
+            <StackPanel Spacing="16">
+
+                <views:SettingsToolPanelView
+                    IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}" />
+
+                <views:SettingsEnginePanelView
+                    IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=1}" />
+
+                <views:SettingsAppearancePanelView
+                    IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=2}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <views:AddToolDialogView
+            Grid.ColumnSpan="2" ZIndex="100" />
+
+        <views:EditToolDialogView
+            Grid.ColumnSpan="2" ZIndex="100" />
+    </Grid>
+</UserControl>

@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:TaskScheduler.App.Controls"
+             x:Class="TaskScheduler.App.Controls.InfoRow"
+             HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+    <Grid ColumnDefinitions="*,16,Auto" Margin="0,4"
+          HorizontalAlignment="Stretch">
+        <TextBlock Grid.Column="0"
+                   Text="{Binding Label, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
+                   FontSize="14"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="2"
+                   Text="{Binding Value, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
+                   FontSize="14" FontWeight="Medium"
+                   VerticalAlignment="Center"
+                   TextWrapping="Wrap" />
+    </Grid>
+</UserControl>

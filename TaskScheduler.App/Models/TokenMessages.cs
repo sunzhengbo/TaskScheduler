@@ -1,10 +1,8 @@
-﻿namespace TaskScheduler.Desktop.Models;
+﻿namespace TaskScheduler.App.Models;
 
 public static class TokenMessages
 {
     public record ShutdownMessage;
-
-    public record CloseWindowMessage;
 
     public record ShowWindowMessage;
 }

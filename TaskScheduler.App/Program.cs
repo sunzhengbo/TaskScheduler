@@ -1,7 +1,7 @@
 ﻿using Avalonia;
 using System;
 
-namespace TaskScheduler.Desktop;
+namespace TaskScheduler.App;
 
 sealed class Program
 {

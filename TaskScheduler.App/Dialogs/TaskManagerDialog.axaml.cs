@@ -1,8 +1,6 @@
-﻿using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
+﻿using Avalonia.Controls;
 
-namespace TaskScheduler.Desktop.Dialogs;
+namespace TaskScheduler.App.Dialogs;
 
 public partial class TaskManagerDialog : UserControl
 {

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using TaskScheduler.Core.Services;
 using TaskScheduler.Infra.Helpers;
 
 namespace TaskScheduler.Core;
@@ -14,37 +15,29 @@ public static class ServiceProviderExtensions
 
         if (string.IsNullOrEmpty(sqlText))
         {
+            var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger("DatabaseInit");
+            logger?.LogWarning("嵌入 SQL 资源 'tables_sqlite.sql' 为空或未找到，业务表将不会被初始化");
             return;
         }
 
-        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-
-        var sqliteSetting = configuration.GetSection("Quartz:dataSource:SQLiteDS:ConnectionString").Get<string>();
-        ArgumentException.ThrowIfNullOrWhiteSpace(sqliteSetting);
-
-        var index = sqliteSetting.IndexOf('=');
-        var prefix = sqliteSetting[..index];
-        var suffix = sqliteSetting[(index + 1)..];
-
-        if (!Path.IsPathRooted(suffix))
-        {
-            var instance = configuration.GetSection("Instance").Get<string>();
-            ArgumentException.ThrowIfNullOrWhiteSpace(instance);
-            var appDataDir = PathHelper.GetOsDataDir(instance);
-            suffix = Path.Combine(appDataDir, suffix);
-        }
-
-        DirectoryHelper.CreateParentDirectory(suffix);
-
-        sqliteSetting = $"{prefix}={suffix}";
-        CreateQuartzDatabase(sqliteSetting, sqlText);
+        var dbProvider = serviceProvider.GetRequiredService<DatabaseProvider>();
+        CreateDatabase(dbProvider.ConnectionString, sqlText, serviceProvider);
     }
 
-    private static void CreateQuartzDatabase(string connectionString, string sqlText)
+    private static void CreateDatabase(string connectionString, string sqlText, IServiceProvider serviceProvider)
     {
-        using var connection = new SqliteConnection(connectionString);
-        connection.Open();
-        using var command = new SqliteCommand(sqlText, connection);
-        command.ExecuteNonQuery();
+        try
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = new SqliteCommand(sqlText, connection);
+            command.ExecuteNonQuery();
+        }
+        catch (SqliteException ex)
+        {
+            var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger("DatabaseInit");
+            logger?.LogError(ex, "Failed to initialize database");
+            throw;
+        }
     }
 }

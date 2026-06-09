@@ -166,3 +166,42 @@ CREATE TABLE IF NOT EXISTS QRTZ_LOCKS
     LOCK_NAME  NVARCHAR(40) NOT NULL,
     PRIMARY KEY (SCHED_NAME,LOCK_NAME)
 );
+
+-- ═══════════════════════════════════════════════════════════
+-- 业务表
+-- ═══════════════════════════════════════════════════════════
+
+-- 执行日志
+CREATE TABLE IF NOT EXISTS execution_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_name NVARCHAR(150) NOT NULL,
+    job_group NVARCHAR(150) NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME,
+    duration_ms INTEGER,
+    exit_code INTEGER,
+    status NVARCHAR(20) NOT NULL,
+    output TEXT,
+    error TEXT,
+    remark NVARCHAR(500)
+);
+CREATE INDEX IF NOT EXISTS idx_exec_logs_job ON execution_logs(job_name, job_group);
+CREATE INDEX IF NOT EXISTS idx_exec_logs_time ON execution_logs(start_time DESC);
+
+-- 工具配置
+CREATE TABLE IF NOT EXISTS tool_configs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_type NVARCHAR(50) NOT NULL,
+    version_name NVARCHAR(100) NOT NULL,
+    executable_path NVARCHAR(500) NOT NULL,
+    is_default BIT NOT NULL DEFAULT 0,
+    env_variables NVARCHAR(1000),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 应用设置
+CREATE TABLE IF NOT EXISTS app_settings (
+    key NVARCHAR(100) PRIMARY KEY,
+    value NVARCHAR(2000),
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

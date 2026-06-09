@@ -1,0 +1,243 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:controls="using:TaskScheduler.App.Controls"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:converters="using:TaskScheduler.App.Converters"
+             xmlns:models="using:TaskScheduler.Core.Models"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="TaskScheduler.App.Views.TaskDetailView"
+             x:DataType="vm:TaskDetailViewModel">
+    <Grid RowDefinitions="Auto,*">
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Padding="16,8"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+                    <Button Command="{Binding GoBackCommand}" Classes="Flat" Padding="4">
+                        <avalonia:MaterialIcon Kind="ArrowLeft" Width="20" Height="20" />
+                    </Button>
+                    <TextBlock Text="任务详情" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Command="{Binding ExecuteNowCommand}" Classes="Flat" Foreground="#4CAF50">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" />
+                            <TextBlock Text="立即执行" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding PauseCommand}" Classes="Flat" Foreground="#FF9800">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Pause" Width="16" Height="16" />
+                            <TextBlock Text="暂停" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ResumeCommand}" Classes="Flat" Foreground="#2196F3">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Replay" Width="16" Height="16" />
+                            <TextBlock Text="恢复" />
+                        </StackPanel>
+                    </Button>
+                    <Border Width="1" Height="20" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            VerticalAlignment="Center" />
+                    <Button Command="{Binding EditCommand}" Classes="Flat">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Pencil" Width="16" Height="16" />
+                            <TextBlock Text="编辑" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding DeleteCommand}" Classes="Flat" Foreground="#FF0000">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Delete" Width="16" Height="16" />
+                            <TextBlock Text="删除" />
+                        </StackPanel>
+                    </Button>
+                    <Border Width="1" Height="20" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            VerticalAlignment="Center" />
+                    <Button Command="{Binding CopyCommand}" Classes="Flat" ToolTip.Tip="复制整个任务到剪贴板">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="ContentCopy" Width="16" Height="16" />
+                            <TextBlock Text="复制" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ExportCommand}" Classes="Flat" ToolTip.Tip="导出整个任务为 JSON 文件">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Export" Width="16" Height="16" />
+                            <TextBlock Text="导出" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" Padding="24,6">
+            <StackPanel Spacing="2">
+                <!-- Detail Header: Title + Badge + Description + Meta -->
+                <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="{Binding CurrentTask.Name}" FontSize="24" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <controls:StatusBadge Text="{Binding CurrentTask.Triggers[0].State, Converter={x:Static converters:TriggerStateToDisplayConverter.Instance}}" Status="{Binding CurrentTask.Triggers[0].State, Converter={x:Static converters:TriggerStateToBadgeStatusConverter.Instance}}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding CurrentTask.Description}"
+                               FontSize="14" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0"
+                                IsVisible="{Binding CurrentTask.CreatedAt, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <controls:StatusBadge Text="{Binding CurrentTask.Group}" Status="Normal" />
+                        <TextBlock FontSize="12"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                   VerticalAlignment="Center">
+                            <Run Text="创建于 " />
+                            <Run Text="{Binding CurrentTask.CreatedAt, StringFormat='{}{0:yyyy-MM-dd}'}" />
+                            <Run Text=" · 最近编辑 " />
+                            <Run Text="{Binding CurrentTask.UpdatedAt, StringFormat='{}{0:yyyy-MM-dd}'}" />
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 两列信息 -->
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                    <!-- 任务配置 -->
+                    <Border Grid.Column="0"
+                            Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                            CornerRadius="12" Padding="12,6"
+                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                    BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,4">
+                                <TextBlock Text="任务配置" FontSize="14" FontWeight="SemiBold" />
+                            </Border>
+                            <controls:InfoRow Label="任务名称" Value="{Binding CurrentTask.Name}" />
+                            <controls:InfoRow Label="分组" Value="{Binding CurrentTask.Group}" />
+                            <controls:InfoRow Label="优先级" Value="{Binding CurrentTask.Priority}" />
+                            <controls:InfoRow Label="触发器类型" Value="{Binding CurrentTask.Triggers[0].Type}" />
+                            <ItemsControl ItemsSource="{Binding CurrentTask.Triggers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:TriggerInfo">
+                                        <controls:InfoRow Label="调度规则" Value="{Binding TriggerDisplay}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <controls:InfoRow Label="使用开机时间" Value="{Binding CurrentTask.UseBootTime}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 调度状态 -->
+                    <Border Grid.Column="1"
+                            Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                            CornerRadius="12" Padding="12,6"
+                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                    BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,4">
+                                <TextBlock Text="调度状态" FontSize="14" FontWeight="SemiBold" />
+                            </Border>
+                            <controls:InfoRow Label="上次执行"
+                                              Value="{Binding Statistics.LastExecutionTime, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" />
+                            <controls:InfoRow Label="累计执行" Value="{Binding Statistics.TotalExecutions}" />
+                            <controls:InfoRow Label="成功率" Value="{Binding Statistics.SuccessRateDisplay}" />
+                            <controls:InfoRow Label="平均耗时" Value="{Binding Statistics.AverageDurationDisplay}" />
+                            <controls:InfoRow Label="连续失败" Value="{Binding Statistics.ConsecutiveFailures}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- 命令详情 -->
+                <Border Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                        CornerRadius="12" Padding="12,8"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1"
+                        IsVisible="{Binding Command, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="命令详情"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                <Button Command="{Binding CopyCommandCommand}" Classes="Flat" Padding="4,0"
+                                        ToolTip.Tip="复制命令">
+                                    <avalonia:MaterialIcon Kind="ContentCopy" Width="14" Height="14" />
+                                </Button>
+                                <Button Command="{Binding ExportCommandCommand}" Classes="Flat" Padding="4,0"
+                                        ToolTip.Tip="导出命令">
+                                    <avalonia:MaterialIcon Kind="Export" Width="14" Height="14" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                        <controls:CommandBlock CommandName="{Binding CurrentTask.Name}"
+                                               CommandType="{Binding Command.Type}"
+                                               CommandBody="{Binding Command.Content}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 最近执行记录 -->
+                <Border Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                        CornerRadius="12" Padding="12,6"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="4">
+                        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                BorderThickness="0,0,0,1" Padding="0,0,0,4" Margin="0,0,0,2">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="最近执行记录" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Content="查看全部 →" Command="{Binding ViewAllLogsCommand}"
+                                        Classes="Flat" Padding="0" FontSize="12"
+                                        Foreground="{DynamicResource SystemAccentColor}" />
+                            </Grid>
+                        </Border>
+                        <!-- Table Header -->
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="0,1" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0" Text="执行时间" FontSize="11" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBlock Grid.Column="1" Text="状态" FontSize="11" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBlock Grid.Column="2" Text="耗时" FontSize="11" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBlock Grid.Column="3" Text="退出码" FontSize="11" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBlock Grid.Column="4" Text="备注" FontSize="11" FontWeight="Medium"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                            <TextBlock Grid.Column="5" Text="" FontSize="11" FontWeight="Medium" />
+                        </Grid>
+                        <!-- Table Rows -->
+                        <ItemsControl ItemsSource="{Binding RecentLogs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:ExecutionLog">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="0,1" ColumnSpacing="12">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding StartTime, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                                                   VerticalAlignment="Center" FontSize="12"
+                                                   FontFamily="Consolas,Courier New,monospace" />
+                                        <controls:StatusBadge Grid.Column="1" Text="{Binding Status, Converter={x:Static converters:ExecutionStatusToDisplayConverter.Instance}}" Status="{Binding Status, Converter={x:Static converters:ExecutionStatusToBadgeStatusConverter.Instance}}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding DurationDisplay}"
+                                                   VerticalAlignment="Center" FontSize="12"
+                                                   FontFamily="Consolas,Courier New,monospace"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding ExitCode}"
+                                                   VerticalAlignment="Center" FontSize="12"
+                                                   FontFamily="Consolas,Courier New,monospace"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                        <TextBlock Grid.Column="4" Text="{Binding Remark}"
+                                                   VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="200" />
+                                        <Button Grid.Column="5" Content="日志" Classes="Flat" Padding="4,0"
+                                                FontSize="11"
+                                                Foreground="{DynamicResource SystemAccentColor}"
+                                                VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

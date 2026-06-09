@@ -1,12 +1,10 @@
 ﻿using System;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CommunityToolkit.Mvvm.Messaging;
-using TaskScheduler.Desktop.Models;
+using TaskScheduler.App.Models;
 
-namespace TaskScheduler.Desktop.Services;
+namespace TaskScheduler.App.Services;
 
 public class TrayIconService : IDisposable
 {
@@ -39,7 +37,6 @@ public class TrayIconService : IDisposable
         };
         exitItem.Click += (_, _) =>
         {
-            WeakReferenceMessenger.Default.Send<TokenMessages.CloseWindowMessage>();
             WeakReferenceMessenger.Default.Send<TokenMessages.ShutdownMessage>();
         };
         _trayIcon.Menu.Add(exitItem);
@@ -53,19 +50,11 @@ public class TrayIconService : IDisposable
 
     private WindowIcon CreateTrayIcon()
     {
-        // 使用 Avalonia 的 AssetLoader 加载嵌入资源
         var assemblyName = GetType().Assembly.GetName().Name;
         var assetPath = $"avares://{assemblyName}/Assets/logo.ico";
         using var stream = AssetLoader.Open(new Uri(assetPath));
 
-        // 使用系统默认图标或创建简单图标
-        var targetBitmap = new RenderTargetBitmap(new PixelSize(16, 16));
-        using (var ctx = targetBitmap.CreateDrawingContext())
-        {
-            ctx.DrawImage(new Bitmap(stream), new Rect(0, 0, 16, 16));
-        }
-
-        return new WindowIcon(targetBitmap);
+        return new WindowIcon(stream);
     }
 
     public void Dispose()

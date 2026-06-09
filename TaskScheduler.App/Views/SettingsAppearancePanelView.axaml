@@ -1,0 +1,141 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:conv="using:TaskScheduler.App.Converters"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="TaskScheduler.App.Views.SettingsAppearancePanelView"
+             x:DataType="vm:SettingsViewModel">
+    <StackPanel Spacing="16">
+        <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                CornerRadius="12" Padding="20"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="1">
+            <StackPanel Spacing="12">
+                <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,4">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="主题模式" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="选择界面的明暗偏好，设置会立即生效并保存到本地"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Spacing="0" Margin="0,4">
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="1" CornerRadius="8,0,0,8">
+                        <Button Content="跟随系统" Command="{Binding SetThemeModeCommand}" CommandParameter="System"
+                                Padding="12,6" BorderThickness="0" CornerRadius="0" FontSize="13"
+                                Background="{Binding ThemeMode, Converter={x:Static conv:StringEqualBrushConverter.Instance}, ConverterParameter=System}"
+                                Foreground="{Binding ThemeMode, Converter={x:Static conv:StringEqualForegroundConverter.Instance}, ConverterParameter=System}"
+                                Cursor="Hand" />
+                    </Border>
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="0,1,0,1">
+                        <Button Content="浅色" Command="{Binding SetThemeModeCommand}" CommandParameter="Light"
+                                Padding="12,6" BorderThickness="0" CornerRadius="0" FontSize="13"
+                                Background="{Binding ThemeMode, Converter={x:Static conv:StringEqualBrushConverter.Instance}, ConverterParameter=Light}"
+                                Foreground="{Binding ThemeMode, Converter={x:Static conv:StringEqualForegroundConverter.Instance}, ConverterParameter=Light}"
+                                Cursor="Hand" />
+                    </Border>
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="1" CornerRadius="0,8,8,0" Margin="-1,0,0,0">
+                        <Button Content="深色" Command="{Binding SetThemeModeCommand}" CommandParameter="Dark"
+                                Padding="12,6" BorderThickness="0" CornerRadius="0" FontSize="13"
+                                Background="{Binding ThemeMode, Converter={x:Static conv:StringEqualBrushConverter.Instance}, ConverterParameter=Dark}"
+                                Foreground="{Binding ThemeMode, Converter={x:Static conv:StringEqualForegroundConverter.Instance}, ConverterParameter=Dark}"
+                                Cursor="Hand" />
+                    </Border>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="16" Margin="0,4">
+                    <Border Grid.Column="0" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="2" CornerRadius="8" Cursor="Hand">
+                        <Border.Styles>
+                            <Style Selector="Border">
+                                <Setter Property="BorderBrush" Value="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" />
+                            </Style>
+                        </Border.Styles>
+                        <StackPanel>
+                            <StackPanel Height="80" Background="#fafafa">
+                                <Border Height="20" Background="#ffffff"
+                                        BorderBrush="#e5e5e5" BorderThickness="0,0,0,1"
+                                        Padding="8,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <Ellipse Width="5" Height="5" Fill="#e5e5e5" />
+                                        <Ellipse Width="5" Height="5" Fill="#e5e5e5" />
+                                        <Ellipse Width="5" Height="5" Fill="#e5e5e5" />
+                                    </StackPanel>
+                                </Border>
+                                <StackPanel Spacing="4" Margin="6,8">
+                                    <Border Height="4" Width="60" Background="#111111" CornerRadius="2" />
+                                    <Border Height="4" Width="96" Background="#e5e5e5" CornerRadius="2" />
+                                    <Border Height="4" Width="48" Background="#2f6feb" CornerRadius="2" />
+                                    <Border Height="4" Width="84" Background="#e5e5e5" CornerRadius="2" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Background="#ffffff" Padding="8"
+                                    BorderBrush="#e5e5e5" BorderThickness="0,1,0,0">
+                                <TextBlock Text="浅色" FontSize="12" FontWeight="Medium"
+                                           Foreground="#111111" HorizontalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="2" CornerRadius="8" Cursor="Hand">
+                        <StackPanel>
+                            <StackPanel Height="80" Background="#0f1117">
+                                <Border Height="20" Background="#181a22"
+                                        BorderBrush="#2a2d38" BorderThickness="0,0,0,1"
+                                        Padding="8,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <Ellipse Width="5" Height="5" Fill="#2a2d38" />
+                                        <Ellipse Width="5" Height="5" Fill="#2a2d38" />
+                                        <Ellipse Width="5" Height="5" Fill="#2a2d38" />
+                                    </StackPanel>
+                                </Border>
+                                <StackPanel Spacing="4" Margin="6,8">
+                                    <Border Height="4" Width="60" Background="#e4e6eb" CornerRadius="2" />
+                                    <Border Height="4" Width="96" Background="#2a2d38" CornerRadius="2" />
+                                    <Border Height="4" Width="48" Background="#4f8fff" CornerRadius="2" />
+                                    <Border Height="4" Width="84" Background="#2a2d38" CornerRadius="2" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Background="#181a22" Padding="8"
+                                    BorderBrush="#2a2d38" BorderThickness="0,1,0,0">
+                                <TextBlock Text="深色" FontSize="12" FontWeight="Medium"
+                                           Foreground="#e4e6eb" HorizontalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </Border>
+        <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                CornerRadius="12" Padding="20"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="1">
+            <StackPanel Spacing="12">
+                <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,4">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="界面密度" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="控制列表和表格的信息密度"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    </StackPanel>
+                </Border>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Text="紧凑模式" FontSize="14" />
+                        <TextBlock Text="减少行间距和内边距，单屏显示更多内容"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding CompactMode}"
+                                  OnContent="" OffContent="" />
+                </Grid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

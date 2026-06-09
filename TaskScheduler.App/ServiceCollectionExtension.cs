@@ -3,11 +3,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
-using TaskScheduler.Desktop.Services;
-using TaskScheduler.Desktop.ViewModels;
-using TaskScheduler.Desktop.Views;
+using TaskScheduler.App.Jobs;
+using TaskScheduler.App.Services;
+using TaskScheduler.App.ViewModels;
+using TaskScheduler.App.Views;
+using TaskScheduler.Core;
 
-namespace TaskScheduler.Desktop;
+namespace TaskScheduler.App;
 
 public static class ServiceCollectionExtension
 {
@@ -27,8 +29,28 @@ public static class ServiceCollectionExtension
 
         services.AddSingleton<TrayIconService>();
 
+        // 导航服务
+        services.AddSingleton<INavigationService, NavigationService>();
+
+        // Views
         services.AddSingleton<MainWindow>();
+
+        // ViewModels
         services.AddScoped<MainWindowViewModel>();
+        services.AddTransient<DashboardViewModel>();
+        services.AddTransient<TaskListViewModel>();
+        services.AddTransient<TaskDetailViewModel>();
+        services.AddTransient<TaskEditorViewModel>();
+        services.AddTransient<ExecutionLogViewModel>();
+        services.AddTransient<SettingsViewModel>();
+        services.AddTransient<AboutViewModel>();
+
+        // App 服务
+        services.AddSingleton<ICommandExecutor, CommandExecutor>();
+        services.AddTransient<CommandJob>();
+
+        // Core 层服务（Quartz + 业务服务）
+        services.AddTaskScheduler(configuration);
     }
 
     private static IConfigurationRoot AddConfiguration(this IServiceCollection services)
@@ -37,11 +59,10 @@ public static class ServiceCollectionExtension
         if (string.IsNullOrWhiteSpace(environment))
         {
 #if DEBUG
-            environment = "Development"
+                environment = "Development";
 #else
-             environment = "Production"
+                environment = "Production";
 #endif
-                ;
         }
 
         Environment.SetEnvironmentVariable("NETCORE_ENVIRONMENT", environment);

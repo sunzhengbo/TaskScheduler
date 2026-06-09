@@ -1,4 +1,4 @@
-﻿namespace TaskScheduler.Desktop.Dialogs;
+﻿namespace TaskScheduler.App.Dialogs;
 
 public class TaskManagerDialogModel
 {

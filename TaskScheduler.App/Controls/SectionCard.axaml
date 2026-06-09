@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:TaskScheduler.App.Controls"
+             x:Class="TaskScheduler.App.Controls.SectionCard">
+    <Border Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+            CornerRadius="8" Padding="20" Margin="4">
+        <StackPanel Spacing="12">
+            <TextBlock x:Name="TitleBlock"
+                       Text="{Binding Title, RelativeSource={RelativeSource AncestorType=local:SectionCard}}"
+                       FontSize="15" FontWeight="SemiBold"
+                       IsVisible="{Binding Title, RelativeSource={RelativeSource AncestorType=local:SectionCard}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <ContentPresenter x:Name="PART_Content"
+                              Content="{Binding CardContent, RelativeSource={RelativeSource AncestorType=local:SectionCard}}" />
+        </StackPanel>
+    </Border>
+</UserControl>

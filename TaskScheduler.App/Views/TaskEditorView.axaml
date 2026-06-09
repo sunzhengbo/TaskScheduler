@@ -1,0 +1,248 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="900"
+             x:Class="TaskScheduler.App.Views.TaskEditorView"
+             x:DataType="vm:TaskEditorViewModel">
+    <ScrollViewer Padding="24">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+            <!-- 验证消息提示 -->
+            <Border Grid.Row="0" Margin="0,0,0,12"
+                    Background="#33FF6B6B" CornerRadius="8" Padding="12,10"
+                    IsVisible="{Binding ValidationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding ValidationMessage}"
+                           FontSize="13" Foreground="#FF6B6B"
+                           TextWrapping="Wrap" />
+            </Border>
+
+            <!-- 第一行：基本信息 + 触发器配置 -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="16">
+                <!-- 左：基本信息 -->
+                <Border Grid.Column="0"
+                        Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                        CornerRadius="12" Padding="20"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="12">
+                        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,4">
+                            <TextBlock Text="基本信息" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                        </Border>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="任务名称 *" FontSize="13"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                            <TextBox Text="{Binding TaskName}" Watermark="例如：数据库备份"
+                                     IsEnabled="{Binding !IsEditMode}" />
+                        </StackPanel>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="分组" FontSize="13"
+                                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                <ComboBox ItemsSource="{Binding AvailableGroups}" SelectedItem="{Binding Group}"
+                                          IsEnabled="{Binding !IsEditMode}" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="优先级" FontSize="13"
+                                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                <ComboBox ItemsSource="{Binding AvailablePriorities}" SelectedItem="{Binding Priority}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="描述" FontSize="13"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                            <TextBox Text="{Binding Description}" Watermark="简要描述这个任务的用途…"
+                                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 右：触发器配置 -->
+                <Border Grid.Column="1"
+                        Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                        CornerRadius="12" Padding="20"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="12">
+                        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,4">
+                            <TextBlock Text="触发器配置" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                        </Border>
+                        <!-- 触发器类型卡片选择 -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="触发器类型" FontSize="13"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
+                                <!-- Cron 表达式 -->
+                                <Border Grid.Column="0"
+                                        CornerRadius="8" Padding="12,10"
+                                        Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                        BorderThickness="1"
+                                        Cursor="Hand">
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <RadioButton GroupName="TriggerType"
+                                                         IsChecked="{Binding IsCronType}" />
+                                            <TextBlock Text="Cron 表达式" FontSize="13" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                        </StackPanel>
+                                        <TextBlock Text="灵活的时间表达式调度"
+                                                   FontSize="11" Margin="26,0,0,0"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                    </StackPanel>
+                                </Border>
+                                <!-- 简单间隔 -->
+                                <Border Grid.Column="1"
+                                        CornerRadius="8" Padding="12,10"
+                                        Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                        BorderThickness="1"
+                                        Cursor="Hand">
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <RadioButton GroupName="TriggerType"
+                                                         IsChecked="{Binding IsSimpleType}" />
+                                            <TextBlock Text="简单间隔" FontSize="13" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                        </StackPanel>
+                                        <TextBlock Text="固定时间间隔重复执行"
+                                                   FontSize="11" Margin="26,0,0,0"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                        <!-- Cron 表达式（仅 Cron 类型时显示） -->
+                        <StackPanel Spacing="4" IsVisible="{Binding IsCronType}">
+                            <TextBlock Text="Cron 表达式 *" FontSize="13"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                            <TextBox Text="{Binding CronExpression}" Watermark="例如: 0/5 * * * ?"
+                                     FontFamily="Consolas,Courier New,monospace" />
+                            <TextBlock Text="[秒] 分 时 日 月 周 [年]（秒和年可选）"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                        </StackPanel>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding IsSimpleType}">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="重复次数 (-1=无限)" FontSize="13"
+                                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                <NumericUpDown Value="{Binding RepeatCount}" Minimum="-1"
+                                               HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="间隔（分钟）" FontSize="13"
+                                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                <NumericUpDown Value="{Binding RepeatIntervalMinutes}" Minimum="1"
+                                               HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                        </Grid>
+                        <CheckBox Content="使用开机时间作为起始时间" IsChecked="{Binding UseBootTime}"
+                                  IsVisible="{Binding IsSimpleType}"
+                                  Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 第二行：命令配置（全宽） -->
+            <Border Grid.Row="2" Margin="0,16,0,0"
+                    Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                    CornerRadius="12" Padding="20"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                    BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,4">
+                        <TextBlock Text="命令配置" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                    </Border>
+                    <!-- 命令类型 -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="命令类型" FontSize="13"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                        <ComboBox ItemsSource="{Binding AvailableCommandTypes}"
+                                  SelectedItem="{Binding Command.Type}"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <!-- 解释器版本 -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="解释器版本" FontSize="13"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}">
+                            <ToolTip.Tip>
+                                <TextBlock Text="选择执行命令的解释器版本，不同版本对应不同的可执行文件路径" />
+                            </ToolTip.Tip>
+                        </TextBlock>
+                        <ComboBox ItemsSource="{Binding AvailableInterpreterVersions}"
+                                  SelectedItem="{Binding Command.InterpreterVersion}"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <!-- 解释器路径提示 -->
+                    <StackPanel Spacing="4"
+                                IsVisible="{Binding Command.InterpreterPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Command.InterpreterPath}"
+                                       FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1" Classes="Flat" Padding="4,2"
+                                    FontSize="11"
+                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                    Content="复制路径"
+                                    Command="{Binding CopyInterpreterPathCommand}"
+                                    CommandParameter="{Binding Command.InterpreterPath}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- 命令内容 -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="命令内容" FontSize="13"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                        <TextBox Text="{Binding Command.Content}"
+                                 Watermark="输入要执行的命令…"
+                                 AcceptsReturn="True" TextWrapping="Wrap" Height="120"
+                                 FontFamily="Consolas,Courier New,monospace"
+                                 FontSize="13" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 第三行：测试输出（全宽） -->
+            <Border Grid.Row="3" Margin="0,16,0,64"
+                    Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                    CornerRadius="12" Padding="20"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                    BorderThickness="1">
+                <StackPanel Spacing="8">
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,4">
+                        <TextBlock Text="测试输出" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                    </Border>
+                    <Border Background="#0d1117" CornerRadius="8" MinHeight="120" Padding="16">
+                        <Grid>
+                            <!-- 占位文本（无输出时显示） -->
+                            <TextBlock Text="// 点击「测试运行」查看命令执行结果"
+                                       FontFamily="Consolas,Courier New,monospace"
+                                       FontSize="14" Foreground="#6e7681"
+                                       VerticalAlignment="Top"
+                                       IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                            <!-- 输出内容 -->
+                            <TextBlock Text="{Binding TestOutput}"
+                                       IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       FontFamily="Consolas,Courier New,monospace"
+                                       FontSize="14" Foreground="#c9d1d9"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:dialogs="clr-namespace:TaskScheduler.App.Dialogs"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="700"
+             x:Class="TaskScheduler.App.Dialogs.EditTaskDialog"
+             x:DataType="dialogs:EditTaskDialogViewModel"
+             MaxWidth="900"
+             MaxHeight="700">
+    <ScrollViewer>
+        <StackPanel Margin="20" Width="850">
+            <TextBlock Text="基本信息" FontWeight="Bold" FontSize="16" Margin="0,0,0,10" />
+
+            <Grid Margin="0,0,0,20" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto,*">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="任务名称:" VerticalAlignment="Center" Margin="0,5" Width="80" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" IsReadOnly="True" Margin="5,5" />
+
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="任务分组:" VerticalAlignment="Center" Margin="0,5" Width="80" />
+                <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding Group}" IsReadOnly="True" Margin="5,5" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="任务描述:" VerticalAlignment="Center" Margin="0,5" Width="80" />
+                <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Description}" Margin="5,5" />
+            </Grid>
+
+            <TextBlock Text="命令配置" FontWeight="Bold" FontSize="16" Margin="0,0,0,10" />
+
+            <Grid Margin="0,0,0,10" RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="命令名称:" VerticalAlignment="Center" Margin="0,5" Width="80" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Command.Name}" Margin="5,5" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="命令类型:" VerticalAlignment="Center" Margin="0,5" Width="80" />
+                <ComboBox Grid.Row="1" Grid.Column="1" SelectedItem="{Binding Command.Type}" Margin="5,5">
+                    <ComboBoxItem Content="系统命令" Tag="SystemCommand" />
+                    <ComboBoxItem Content="PowerShell" Tag="PowerShellCommand" />
+                </ComboBox>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="命令描述:" VerticalAlignment="Center" Margin="0,5" Width="80" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Command.Description}" Margin="5,5" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="命令内容:" VerticalAlignment="Top" Margin="0,10" Width="80" />
+                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Command.Content}" Margin="5,5"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80"
+                         FontFamily="Consolas,Courier New,monospace" />
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+                <Button Command="{Binding ExecuteCommandCommand}" Margin="5">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <avalonia:MaterialIcon Kind="Play" />
+                        <TextBlock Text="执行命令" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <TextBlock Text="命令输出" FontWeight="Bold" FontSize="16" Margin="0,0,0,10" />
+            <TextBox Text="{Binding CommandOutput}"
+                     IsReadOnly="True"
+                     Height="100"
+                     Margin="0,0,0,10"
+                     TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <Button Command="{Binding SaveTaskCommand}" Margin="5">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <avalonia:MaterialIcon Kind="Check" />
+                        <TextBlock Text="保存" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

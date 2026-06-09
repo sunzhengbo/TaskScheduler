@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:TaskScheduler.App.Controls"
+             x:Class="TaskScheduler.App.Controls.TerminalPanel">
+    <Border Background="#0d1117">
+        <ScrollViewer Padding="16">
+            <ItemsControl x:Name="LinesItems"
+                          ItemsSource="{Binding Lines, RelativeSource={RelativeSource AncestorType=local:TerminalPanel}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}"
+                                   FontFamily="Consolas,Courier New,monospace"
+                                   FontSize="14" Foreground="#c9d1d9"
+                                   TextWrapping="Wrap" Margin="0,2" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Border>
+</UserControl>

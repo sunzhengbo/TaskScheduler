@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:controls="using:TaskScheduler.App.Controls"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="TaskScheduler.App.Views.AboutView"
+             x:DataType="vm:AboutViewModel">
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="24" MaxWidth="720" HorizontalAlignment="Left">
+            <!-- 关于卡片 -->
+            <Border Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+                    CornerRadius="12" Padding="20"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                    BorderThickness="1">
+                <StackPanel Spacing="0">
+
+                    <!-- Logo + 名称 -->
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,0,0,24">
+                        <Border Width="56" Height="56" CornerRadius="12"
+                                Background="{DynamicResource SystemControlHighlightAccentBrush}">
+                            <avalonia:MaterialIcon Kind="TimerCogOutline" Width="28" Height="28"
+                                                   Foreground="{DynamicResource SystemAccentColor}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="TaskScheduler" FontSize="20" FontWeight="SemiBold" />
+                            <TextBlock Text="跨平台任务调度系统"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Section Header: 应用信息 -->
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                            BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,4">
+                        <TextBlock Text="应用信息" FontSize="14" FontWeight="SemiBold" />
+                    </Border>
+
+                    <!-- 信息行（带分隔线） -->
+                    <StackPanel Spacing="0">
+                        <controls:InfoRow Label="版本" Value="{Binding Version}" />
+                        <Border Height="1" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" Opacity="0.3" />
+                        <controls:InfoRow Label="发布时间" Value="{Binding ReleaseDate}" />
+                        <Border Height="1" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" Opacity="0.3" />
+                        <controls:InfoRow Label="框架" Value="{Binding Framework}" />
+                        <Border Height="1" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" Opacity="0.3" />
+                        <controls:InfoRow Label="支持平台" Value="{Binding Platforms}" />
+                        <Border Height="1" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" Opacity="0.3" />
+                        <controls:InfoRow Label="许可证" Value="{Binding License}" />
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
