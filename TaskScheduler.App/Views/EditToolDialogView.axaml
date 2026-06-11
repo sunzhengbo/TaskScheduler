@@ -47,16 +47,12 @@
                 <Border DockPanel.Dock="Bottom" Padding="16,12"
                         BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                         BorderThickness="0,1,0,0">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding SaveStatusMessage}"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SystemAccentColor}"
-                                   VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Content="关闭" Command="{Binding CloseEditToolCommand}"
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="关闭" Command="{Binding CloseEditToolCommand}"
                                 Classes="flatBtn" Padding="12,6"
                                 BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                                 BorderThickness="1" />
-                    </Grid>
+                    </StackPanel>
                 </Border>
                 <ScrollViewer>
                     <StackPanel Spacing="16" Margin="20,16">

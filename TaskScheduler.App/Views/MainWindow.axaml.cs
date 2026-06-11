@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using CommunityToolkit.Mvvm.Messaging;
 using Ursa.Controls;
@@ -80,6 +81,13 @@ public partial class MainWindow : Window
 
     private void ShowWindowFromTray()
     {
+        // 最小化启动时 ShutdownMode 被设为 OnExplicitShutdown（见 App.axaml.cs），
+        // 窗口关闭不会退出应用（托盘常驻行为），此处仅恢复 MainWindow 引用。
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+            && desktop.MainWindow == null)
+        {
+            desktop.MainWindow = this;
+        }
         Show();
         Activate();
         WindowState = WindowState.Normal;

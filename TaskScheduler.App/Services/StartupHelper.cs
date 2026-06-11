@@ -32,33 +32,40 @@ public static class StartupHelper
     /// <summary>
     /// 设置或取消开机自启
     /// </summary>
-    public static void SetStartupOnBoot(bool enabled)
+    public static void SetStartupOnBoot(bool enabled, bool minimize)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            SetWindowsStartup(enabled);
+            SetWindowsStartup(enabled, minimize);
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            SetMacStartup(enabled);
+            SetMacStartup(enabled, minimize);
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            SetLinuxStartup(enabled);
+            SetLinuxStartup(enabled, minimize);
     }
 
     /// <summary>
     /// 同步系统自启配置，使其与期望状态一致
     /// </summary>
-    public static void SyncStartup(bool shouldBeEnabled)
+    public static void SyncStartup(bool enabled, bool minimize)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            SyncWindowsStartup(shouldBeEnabled);
+            SyncWindowsStartup(enabled, minimize);
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            SyncMacStartup(shouldBeEnabled);
+            SyncMacStartup(enabled, minimize);
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            SyncLinuxStartup(shouldBeEnabled);
+            SyncLinuxStartup(enabled, minimize);
     }
 
     #region Windows
 
+    private static string GetWindowsCommand(bool minimize)
+    {
+        var exePath = Environment.ProcessPath ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(exePath)) return string.Empty;
+        return minimize ? $"\"{exePath}\" --minimize" : $"\"{exePath}\"";
+    }
+
     [SupportedOSPlatform("windows")]
-    private static void SetWindowsStartup(bool enabled)
+    private static void SetWindowsStartup(bool enabled, bool minimize)
     {
         try
         {
@@ -67,9 +74,9 @@ public static class StartupHelper
 
             if (enabled)
             {
-                var exePath = Environment.ProcessPath;
-                if (!string.IsNullOrWhiteSpace(exePath))
-                    key.SetValue(RegistryKey, $"\"{exePath}\"");
+                var command = GetWindowsCommand(minimize);
+                if (!string.IsNullOrWhiteSpace(command))
+                    key.SetValue(RegistryKey, command);
             }
             else
             {
@@ -83,7 +90,7 @@ public static class StartupHelper
     }
 
     [SupportedOSPlatform("windows")]
-    private static void SyncWindowsStartup(bool shouldBeEnabled)
+    private static void SyncWindowsStartup(bool shouldBeEnabled, bool minimize)
     {
         try
         {
@@ -91,15 +98,19 @@ public static class StartupHelper
             if (key == null) return;
 
             var currentValue = key.GetValue(RegistryKey)?.ToString();
-            var exePath = Environment.ProcessPath ?? string.Empty;
-            var expectedValue = string.IsNullOrWhiteSpace(exePath) ? null : $"\"{exePath}\"";
+            var expectedValue = GetWindowsCommand(minimize);
+            if (string.IsNullOrWhiteSpace(expectedValue))
+            {
+                System.Diagnostics.Debug.WriteLine("同步 Windows 开机自启失败: 无法获取可执行文件路径");
+                return;
+            }
             var isSet = currentValue != null;
 
-            if (shouldBeEnabled && !isSet && expectedValue != null)
+            if (shouldBeEnabled && !isSet)
                 key.SetValue(RegistryKey, expectedValue);
             else if (!shouldBeEnabled && isSet)
                 key.DeleteValue(RegistryKey, false);
-            else if (shouldBeEnabled && isSet && currentValue != expectedValue && expectedValue != null)
+            else if (shouldBeEnabled && isSet && currentValue != expectedValue)
                 key.SetValue(RegistryKey, expectedValue);
         }
         catch (Exception ex)
@@ -112,7 +123,7 @@ public static class StartupHelper
 
     #region macOS
 
-    private static string BuildPlistContent()
+    private static string BuildPlistContent(bool minimize)
     {
         var exePath = Environment.ProcessPath ?? AppName;
         return $"""
@@ -125,6 +136,7 @@ public static class StartupHelper
                     <key>ProgramArguments</key>
                     <array>
                         <string>{exePath}</string>
+                {(minimize ? "                        <string>--minimize</string>" : "")}
                     </array>
                     <key>RunAtLoad</key>
                     <true/>
@@ -135,7 +147,7 @@ public static class StartupHelper
                 """;
     }
 
-    private static void SetMacStartup(bool enabled)
+    private static void SetMacStartup(bool enabled, bool minimize)
     {
         try
         {
@@ -143,7 +155,7 @@ public static class StartupHelper
             {
                 var dir = Path.GetDirectoryName(PlistPath);
                 if (dir != null) Directory.CreateDirectory(dir);
-                File.WriteAllText(PlistPath, BuildPlistContent());
+                File.WriteAllText(PlistPath, BuildPlistContent(minimize));
             }
             else
             {
@@ -157,16 +169,15 @@ public static class StartupHelper
         }
     }
 
-    private static void SyncMacStartup(bool shouldBeEnabled)
+    private static void SyncMacStartup(bool shouldBeEnabled, bool minimize)
     {
         try
         {
             var exists = File.Exists(PlistPath);
-            var exePath = Environment.ProcessPath ?? AppName;
 
             if (shouldBeEnabled)
             {
-                var expectedContent = BuildPlistContent();
+                var expectedContent = BuildPlistContent(minimize);
                 if (!exists || File.ReadAllText(PlistPath) != expectedContent)
                 {
                     var dir = Path.GetDirectoryName(PlistPath);
@@ -189,21 +200,22 @@ public static class StartupHelper
 
     #region Linux
 
-    private static string BuildDesktopFileContent()
+    private static string BuildDesktopFileContent(bool minimize)
     {
         var exePath = Environment.ProcessPath ?? AppName;
+        var exec = minimize ? $"{exePath} --minimize" : exePath;
         return $"""
                 [Desktop Entry]
                 Type=Application
                 Name=TaskScheduler
                 Comment=Task Scheduler Application
-                Exec={exePath}
+                Exec={exec}
                 Terminal=false
                 X-GNOME-Autostart-enabled=true
                 """;
     }
 
-    private static void SetLinuxStartup(bool enabled)
+    private static void SetLinuxStartup(bool enabled, bool minimize)
     {
         try
         {
@@ -211,7 +223,7 @@ public static class StartupHelper
             {
                 var dir = Path.GetDirectoryName(DesktopFilePath);
                 if (dir != null) Directory.CreateDirectory(dir);
-                File.WriteAllText(DesktopFilePath, BuildDesktopFileContent());
+                File.WriteAllText(DesktopFilePath, BuildDesktopFileContent(minimize));
             }
             else
             {
@@ -225,12 +237,12 @@ public static class StartupHelper
         }
     }
 
-    private static void SyncLinuxStartup(bool shouldBeEnabled)
+    private static void SyncLinuxStartup(bool shouldBeEnabled, bool minimize)
     {
         try
         {
             var exists = File.Exists(DesktopFilePath);
-            var expectedContent = BuildDesktopFileContent();
+            var expectedContent = BuildDesktopFileContent(minimize);
 
             if (shouldBeEnabled)
             {

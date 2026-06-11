@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using Avalonia.Collections;
@@ -11,6 +12,7 @@ using CommunityToolkit.Mvvm.Input;
 
 using Microsoft.Extensions.Logging;
 
+using TaskScheduler.App.Models;
 using TaskScheduler.App.Services;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
@@ -30,12 +32,18 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SaveButtonText))]
     private bool _isSaving;
-    [ObservableProperty] private string _saveStatusMessage = string.Empty;
 
     public string SaveButtonText => IsSaving ? "保存中..." : "保存设置";
 
     // 引擎设置
-    [ObservableProperty] private bool _isStartupOnBootEnabled;
+    [ObservableProperty] private bool _startupEnabled;
+    [ObservableProperty] private bool _startupMinimize;
+
+    partial void OnStartupEnabledChanged(bool value)
+    {
+        if (!value)
+            StartupMinimize = false;
+    }
     [ObservableProperty] private string _logRetentionDays = "30";
     [ObservableProperty] private string _maxThreads = "10";
     [ObservableProperty] private string _databaseType = "SQLite";
@@ -80,26 +88,38 @@ public partial class SettingsViewModel : ViewModelBase
             Tools = new AvaloniaList<ToolConfig>(tools);
             ToolGroups = BuildToolGroups(tools);
 
-            var logDays = await _settingsService.GetValueAsync("log_retention_days");
-            if (logDays != null) LogRetentionDays = logDays;
+            // 迁移旧数据：读取旧 key，转换为新格式后删除
+            await MigrateOldSettingsAsync();
 
-            var threads = await _settingsService.GetValueAsync("max_threads");
-            if (threads != null) MaxThreads = threads;
+            var engineJson = await _settingsService.GetValueAsync("engine_settings");
+            if (!string.IsNullOrEmpty(engineJson))
+            {
+                try
+                {
+                    var engine = EngineSettings.FromJson(engineJson);
+                    LogRetentionDays = engine.LogRetentionDays.ToString();
+                    MaxThreads = engine.MaxThreads.ToString();
+                    DatabaseType = engine.DatabaseType;
+                    StartupEnabled = engine.StartupEnabled;
+                    StartupMinimize = engine.StartupMinimize;
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "反序列化引擎设置失败"); }
+            }
 
-            var dbType = await _settingsService.GetValueAsync("database_type");
-            if (dbType != null) DatabaseType = dbType;
-
-            var theme = await _settingsService.GetValueAsync("theme_mode");
-            if (theme != null) ThemeMode = theme;
-
-            var compact = await _settingsService.GetValueAsync("compact_mode");
-            if (compact != null) CompactMode = compact == "true";
-
-            var startup = await _settingsService.GetValueAsync("startup_on_boot");
-            IsStartupOnBootEnabled = startup == "true";
+            var appearanceJson = await _settingsService.GetValueAsync("appearance_settings");
+            if (!string.IsNullOrEmpty(appearanceJson))
+            {
+                try
+                {
+                    var appearance = AppearanceSettings.FromJson(appearanceJson);
+                    ThemeMode = appearance.ThemeMode;
+                    CompactMode = appearance.CompactMode;
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "反序列化外观设置失败"); }
+            }
 
             // 加载时同步系统自启配置，确保与数据库设置一致
-            StartupHelper.SyncStartup(IsStartupOnBootEnabled);
+            StartupHelper.SyncStartup(StartupEnabled, StartupMinimize);
         }
         catch (Exception ex)
             {
@@ -176,19 +196,27 @@ public partial class SettingsViewModel : ViewModelBase
             _logger.LogWarning("无效的最大线程数: {Value}", MaxThreads);
             return;
         }
-        await _settingsService.SetValueAsync("log_retention_days", days.ToString());
-        await _settingsService.SetValueAsync("max_threads", threads.ToString());
-        await _settingsService.SetValueAsync("database_type", DatabaseType);
-
-        await _settingsService.SetValueAsync("startup_on_boot", IsStartupOnBootEnabled.ToString().ToLower());
-        StartupHelper.SetStartupOnBoot(IsStartupOnBootEnabled);
+        var engine = new EngineSettings
+        {
+            LogRetentionDays = days,
+            MaxThreads = threads,
+            DatabaseType = DatabaseType,
+            StartupEnabled = StartupEnabled,
+            StartupMinimize = StartupMinimize
+        };
+        await _settingsService.SetValueAsync("engine_settings", engine.ToJson());
+        StartupHelper.SetStartupOnBoot(StartupEnabled, StartupMinimize);
     }
 
     [RelayCommand]
     private async Task SaveAppearanceSettingsAsync()
     {
-        await _settingsService.SetValueAsync("theme_mode", ThemeMode);
-        await _settingsService.SetValueAsync("compact_mode", CompactMode.ToString().ToLower());
+        var appearance = new AppearanceSettings
+        {
+            ThemeMode = ThemeMode,
+            CompactMode = CompactMode
+        };
+        await _settingsService.SetValueAsync("appearance_settings", appearance.ToJson());
         ApplyTheme(ThemeMode);
     }
 
@@ -197,7 +225,8 @@ public partial class SettingsViewModel : ViewModelBase
     {
         ThemeMode = mode;
         ApplyTheme(mode);
-        await _settingsService.SetValueAsync("theme_mode", mode);
+        var appearance = new AppearanceSettings { ThemeMode = ThemeMode, CompactMode = CompactMode };
+        await _settingsService.SetValueAsync("appearance_settings", appearance.ToJson());
     }
 
     private static void ApplyTheme(string mode)
@@ -219,6 +248,8 @@ public partial class SettingsViewModel : ViewModelBase
         DatabaseType = "SQLite";
         ThemeMode = "System";
         CompactMode = false;
+        StartupEnabled = false;
+        StartupMinimize = false;
         ApplyTheme("System");
     }
 
@@ -227,19 +258,16 @@ public partial class SettingsViewModel : ViewModelBase
     {
         if (IsSaving) return;
         IsSaving = true;
-        SaveStatusMessage = string.Empty;
         try
         {
             await SaveEngineSettingsAsync();
             await SaveAppearanceSettingsAsync();
             ShowToast("保存成功", NotificationType.Success);
-            SaveStatusMessage = "✓ 保存成功";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "保存设置失败");
             ShowToast("保存失败", NotificationType.Error);
-            SaveStatusMessage = "✗ 保存失败";
         }
         finally
         {
@@ -304,7 +332,6 @@ public partial class SettingsViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(tool.VersionName) || string.IsNullOrWhiteSpace(tool.ExecutablePath)) return;
 
         IsSaving = true;
-        SaveStatusMessage = string.Empty;
         try
         {
             await _toolService.UpdateToolAsync(tool);
@@ -313,13 +340,11 @@ public partial class SettingsViewModel : ViewModelBase
             EditingVersions = new AvaloniaList<ToolConfig>(versions.OrderByDescending(t => t.IsDefault));
             await LoadSettingsAsync();
             ShowToast("保存成功", NotificationType.Success);
-            SaveStatusMessage = "✓ 保存成功";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "保存版本失败");
             ShowToast("保存失败", NotificationType.Error);
-            SaveStatusMessage = "✗ 保存失败";
         }
         finally
         {
@@ -346,6 +371,58 @@ public partial class SettingsViewModel : ViewModelBase
             .ToList();
 
         return new AvaloniaList<ToolGroupItem>(groups);
+    }
+
+    /// <summary>
+    /// 迁移旧版散装 key-value 设置到新版 JSON blob 格式
+    /// </summary>
+    private async Task MigrateOldSettingsAsync()
+    {
+        var oldKeys = new[] { "log_retention_days", "max_threads", "database_type", "theme_mode", "compact_mode", "startup_settings" };
+        var hasOldData = false;
+        foreach (var key in oldKeys)
+        {
+            var val = await _settingsService.GetValueAsync(key);
+            if (val != null) { hasOldData = true; break; }
+        }
+        if (!hasOldData) return;
+
+        _logger.LogInformation("检测到旧版设置数据，开始迁移...");
+
+        var logDays = await _settingsService.GetValueAsync("log_retention_days");
+        var threads = await _settingsService.GetValueAsync("max_threads");
+        var dbType = await _settingsService.GetValueAsync("database_type");
+        var startupJson = await _settingsService.GetValueAsync("startup_settings");
+
+        var engine = new EngineSettings();
+        if (logDays != null && int.TryParse(logDays, out var d)) engine.LogRetentionDays = d;
+        if (threads != null && int.TryParse(threads, out var t)) engine.MaxThreads = t;
+        if (dbType != null) engine.DatabaseType = dbType;
+        if (!string.IsNullOrEmpty(startupJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(startupJson);
+                if (doc.RootElement.TryGetProperty("enabled", out var enabled))
+                    engine.StartupEnabled = enabled.GetBoolean();
+                if (doc.RootElement.TryGetProperty("minimize", out var minimize))
+                    engine.StartupMinimize = minimize.GetBoolean();
+            }
+            catch { }
+        }
+        await _settingsService.SetValueAsync("engine_settings", engine.ToJson());
+
+        var theme = await _settingsService.GetValueAsync("theme_mode");
+        var compact = await _settingsService.GetValueAsync("compact_mode");
+        var appearance = new AppearanceSettings();
+        if (theme != null) appearance.ThemeMode = theme;
+        if (compact != null) appearance.CompactMode = compact == "true";
+        await _settingsService.SetValueAsync("appearance_settings", appearance.ToJson());
+
+        foreach (var key in oldKeys)
+            await _settingsService.DeleteAsync(key);
+
+        _logger.LogInformation("旧版设置数据迁移完成");
     }
 
     private static (string icon, string color) GetToolIcon(string toolType) => toolType switch

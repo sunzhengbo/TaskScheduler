@@ -31,9 +31,24 @@
                                TextWrapping="Wrap" />
                 </StackPanel>
                 <ToggleSwitch Grid.Column="1"
-                              IsChecked="{Binding IsStartupOnBootEnabled}"
+                              IsChecked="{Binding StartupEnabled}"
                               VerticalAlignment="Center"
                               Margin="0,0,0,0" />
+            </Grid>
+            <!-- 启动时最小化 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="0,4"
+                  IsEnabled="{Binding StartupEnabled}">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="启动时最小化" FontSize="13" FontWeight="Medium"
+                               Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                    <TextBlock Text="开机自启动时自动最小化到系统托盘，不显示主窗口"
+                               FontSize="12"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1"
+                              IsChecked="{Binding StartupMinimize}"
+                              VerticalAlignment="Center" />
             </Grid>
             <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                     BorderThickness="0,0,0,1" Margin="0,0,0,4" />

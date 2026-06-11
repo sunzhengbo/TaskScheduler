@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using Avalonia.Markup.Xaml;
@@ -20,6 +21,8 @@ namespace TaskScheduler.App;
 
 public class App : Application
 {
+    internal MainWindow? MainWindowRef { get; private set; }
+
     /// <summary>
     /// Quartz Scheduler 就绪信号，启动完成后置为 true，失败时置为异常。
     /// 可用于需要等待 Scheduler 就绪后再执行调度操作的场景。
@@ -68,11 +71,34 @@ public class App : Application
 
         var mainWindow = serviceProvider.GetRequiredService<MainWindow>();
         mainWindow.DataContext = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        MainWindowRef = mainWindow;
+
+        var startMinimized = Environment.GetCommandLineArgs().Contains("--minimize");
+        if (!startMinimized)
+        {
+            try
+            {
+                var settingsService = serviceProvider.GetRequiredService<ISettingsService>();
+                var engineJson = settingsService.GetValue("engine_settings");
+                startMinimized = EngineSettings.FromJson(engineJson).StartupMinimize;
+            }
+            catch (Exception ex)
+            {
+                serviceProvider.GetService<ILoggerFactory>()?.CreateLogger<App>()
+                    .LogWarning(ex, "加载启动配置失败");
+            }
+        }
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            
-            desktop.MainWindow = mainWindow;
+            if (startMinimized)
+            {
+                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            }
+            else
+            {
+                desktop.MainWindow = mainWindow;
+            }
 
             WeakReferenceMessenger.Default.Register<TokenMessages.ShutdownMessage>(this,
                 async (_, _) =>
@@ -153,7 +179,8 @@ public class App : Application
         try
         {
             var settingsService = serviceProvider.GetRequiredService<ISettingsService>();
-            var themeMode = settingsService.GetValue("theme_mode");
+            var appearanceJson = settingsService.GetValue("appearance_settings");
+            var themeMode = AppearanceSettings.FromJson(appearanceJson).ThemeMode;
             if (!string.IsNullOrEmpty(themeMode))
             {
                 var app = Current;
