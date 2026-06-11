@@ -3,7 +3,7 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
-.idea
-/Logs
-/.vs
-/TaskScheduler.App/Logs
+.idea/
+Logs/
+.vs/
+appsettings.*.json

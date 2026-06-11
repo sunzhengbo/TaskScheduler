@@ -101,7 +101,7 @@ public class App : Application
             }
 
             WeakReferenceMessenger.Default.Register<TokenMessages.ShutdownMessage>(this,
-                async (_, _) =>
+                async void (_, _) =>
                 {
                     try
                     {
@@ -150,7 +150,7 @@ public class App : Application
                         // 5. 关闭 Serilog，刷新并释放日志文件句柄
                         try
                         {
-                            Serilog.Log.CloseAndFlush();
+                            await Serilog.Log.CloseAndFlushAsync();
                         }
                         catch
                         {
@@ -163,7 +163,15 @@ public class App : Application
                     catch (Exception ex)
                     {
                         // async void 回调中必须兜底 catch，否则未处理异常直接崩溃进程
-                        try { Serilog.Log.Fatal(ex, "Shutdown handler 发生致命错误"); } catch { /* 忽略 */ }
+                        try
+                        {
+                            Serilog.Log.Fatal(ex, "Shutdown handler 发生致命错误");
+                        }
+                        catch
+                        {
+                            /* 忽略 */
+                        }
+
                         Environment.Exit(1);
                     }
                 });
@@ -203,5 +211,4 @@ public class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
-
 }

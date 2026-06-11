@@ -81,8 +81,8 @@ public class TaskSchedulerService : ITaskSchedulerService
                 .WithSimpleSchedule(x => x
                     .WithRepeatCount(request.RepeatCount)
                     .WithInterval(request.RepeatInterval)
-                    .WithMisfireHandlingInstructionFireNow())
-                .StartNow()
+                    .WithMisfireHandlingInstructionNextWithRemainingCount())
+                .StartAt(DateTimeOffset.UtcNow.Add(request.RepeatInterval))
                 .Build();
         }
         else
@@ -93,7 +93,7 @@ public class TaskSchedulerService : ITaskSchedulerService
                 .WithCronSchedule(normalizedCron, x => x
                     .InTimeZone(TimeZoneInfo.Local)
                     .WithMisfireHandlingInstructionFireAndProceed())
-                .StartNow()
+                .StartAt(DateTimeOffset.UtcNow)
                 .Build();
         }
 
@@ -246,7 +246,7 @@ public class TaskSchedulerService : ITaskSchedulerService
             .WithCronSchedule(normalizedCron, x => x
                 .InTimeZone(TimeZoneInfo.Local)
                 .WithMisfireHandlingInstructionFireAndProceed())
-            .StartNow()
+            .StartAt(DateTimeOffset.UtcNow)
             .Build();
 
         await _scheduler.RescheduleJob(triggerKey, newTrigger, ct);
@@ -266,8 +266,8 @@ public class TaskSchedulerService : ITaskSchedulerService
             .WithSimpleSchedule(x => x
                 .WithRepeatCount(repeatCount)
                 .WithInterval(interval)
-                .WithMisfireHandlingInstructionFireNow())
-            .StartNow()
+                .WithMisfireHandlingInstructionNextWithRemainingCount())
+            .StartAt(DateTimeOffset.UtcNow.Add(interval))
             .Build();
 
         await _scheduler.RescheduleJob(triggerKey, newTrigger, ct);
