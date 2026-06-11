@@ -85,12 +85,11 @@
                         <controls:StatusBadge Text="{Binding CurrentTask.Triggers[0].State, Converter={x:Static converters:TriggerStateToDisplayConverter.Instance}}" Status="{Binding CurrentTask.Triggers[0].State, Converter={x:Static converters:TriggerStateToBadgeStatusConverter.Instance}}" />
                     </StackPanel>
                     <TextBlock Text="{Binding CurrentTask.Description}"
-                               FontSize="14" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                               FontSize="14" />
                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0"
                                 IsVisible="{Binding CurrentTask.CreatedAt, Converter={x:Static ObjectConverters.IsNotNull}}">
                         <controls:StatusBadge Text="{Binding CurrentTask.Group}" Status="Normal" />
                         <TextBlock FontSize="12"
-                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                    VerticalAlignment="Center">
                             <Run Text="创建于 " />
                             <Run Text="{Binding CurrentTask.CreatedAt, StringFormat='{}{0:yyyy-MM-dd}'}" />
@@ -187,29 +186,22 @@
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBlock Grid.Column="0" Text="最近执行记录" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <Button Grid.Column="1" Content="查看全部 →" Command="{Binding ViewAllLogsCommand}"
-                                        Classes="Flat" Padding="0" FontSize="12"
-                                        Foreground="{DynamicResource SystemAccentColor}" />
+                                        Classes="Flat" Padding="0" FontSize="12" />
                             </Grid>
                         </Border>
                         <!-- Table Header -->
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="0,1" ColumnSpacing="12">
-                            <TextBlock Grid.Column="0" Text="执行时间" FontSize="11" FontWeight="Medium"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                            <TextBlock Grid.Column="1" Text="状态" FontSize="11" FontWeight="Medium"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                            <TextBlock Grid.Column="2" Text="耗时" FontSize="11" FontWeight="Medium"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                            <TextBlock Grid.Column="3" Text="退出码" FontSize="11" FontWeight="Medium"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                            <TextBlock Grid.Column="4" Text="备注" FontSize="11" FontWeight="Medium"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                            <TextBlock Grid.Column="5" Text="" FontSize="11" FontWeight="Medium" />
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,1" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0" Text="执行时间" FontSize="11" FontWeight="Medium" />
+                            <TextBlock Grid.Column="1" Text="状态" FontSize="11" FontWeight="Medium" />
+                            <TextBlock Grid.Column="2" Text="耗时" FontSize="11" FontWeight="Medium" />
+                            <TextBlock Grid.Column="3" Text="退出码" FontSize="11" FontWeight="Medium" />
+                            <TextBlock Grid.Column="4" Text="备注" FontSize="11" FontWeight="Medium" />
                         </Grid>
                         <!-- Table Rows -->
                         <ItemsControl ItemsSource="{Binding RecentLogs}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="models:ExecutionLog">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="0,1" ColumnSpacing="12">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,1" ColumnSpacing="12">
                                         <TextBlock Grid.Column="0"
                                                    Text="{Binding StartTime, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
                                                    VerticalAlignment="Center" FontSize="12"
@@ -217,20 +209,13 @@
                                         <controls:StatusBadge Grid.Column="1" Text="{Binding Status, Converter={x:Static converters:ExecutionStatusToDisplayConverter.Instance}}" Status="{Binding Status, Converter={x:Static converters:ExecutionStatusToBadgeStatusConverter.Instance}}" />
                                         <TextBlock Grid.Column="2" Text="{Binding DurationDisplay}"
                                                    VerticalAlignment="Center" FontSize="12"
-                                                   FontFamily="Consolas,Courier New,monospace"
-                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                                   FontFamily="Consolas,Courier New,monospace" />
                                         <TextBlock Grid.Column="3" Text="{Binding ExitCode}"
                                                    VerticalAlignment="Center" FontSize="12"
-                                                   FontFamily="Consolas,Courier New,monospace"
-                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                                   FontFamily="Consolas,Courier New,monospace" />
                                         <TextBlock Grid.Column="4" Text="{Binding Remark}"
                                                    VerticalAlignment="Center" FontSize="11"
-                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                                    TextTrimming="CharacterEllipsis" MaxWidth="200" />
-                                        <Button Grid.Column="5" Content="日志" Classes="Flat" Padding="4,0"
-                                                FontSize="11"
-                                                Foreground="{DynamicResource SystemAccentColor}"
-                                                VerticalAlignment="Center" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

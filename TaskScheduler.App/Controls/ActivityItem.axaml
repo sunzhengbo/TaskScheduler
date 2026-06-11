@@ -22,7 +22,6 @@
                            FontWeight="Medium" FontSize="14" />
                 <TextBlock Text="{Binding Detail, RelativeSource={RelativeSource AncestorType=local:ActivityItem}}"
                            FontSize="12"
-                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <!-- 时间 -->

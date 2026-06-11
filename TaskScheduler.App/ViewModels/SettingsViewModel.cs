@@ -262,7 +262,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             await SaveEngineSettingsAsync();
             await SaveAppearanceSettingsAsync();
-            ShowToast("保存成功", NotificationType.Success);
+            ShowToast("保存成功");
         }
         catch (Exception ex)
         {
@@ -339,7 +339,7 @@ public partial class SettingsViewModel : ViewModelBase
             var versions = await _toolService.GetToolsByTypeAsync(EditToolType);
             EditingVersions = new AvaloniaList<ToolConfig>(versions.OrderByDescending(t => t.IsDefault));
             await LoadSettingsAsync();
-            ShowToast("保存成功", NotificationType.Success);
+            ShowToast("保存成功");
         }
         catch (Exception ex)
         {
@@ -428,12 +428,12 @@ public partial class SettingsViewModel : ViewModelBase
     private static (string icon, string color) GetToolIcon(string toolType) => toolType switch
     {
         "Python" => ("Py", "#3776ab"),
-        "PowerShell" => ("PS", "#012456"),
-        "Node.js" => ("JS", "#339933"),
-        "Shell" or "Shell / Bash" => ("Sh", "#4eaa25"),
-        "Ruby" => ("Rb", "#cc342d"),
-        "Go" => ("Go", "#00add8"),
-        "Java" => ("Jv", "#ed8b00"),
-        _ => (toolType.Length >= 2 ? toolType[..2] : toolType, "#6b6b6b")
+        "PowerShell" => ("PS", "#3776ab"),
+        "Node.js" => ("JS", "#3776ab"),
+        "Shell" or "Shell / Bash" => ("Sh", "#3776ab"),
+        "Ruby" => ("Rb", "#3776ab"),
+        "Go" => ("Go", "#3776ab"),
+        "Java" => ("Jv", "#3776ab"),
+        _ => (toolType.Length >= 2 ? toolType[..2] : toolType, "#3776ab")
     };
 }

@@ -20,8 +20,7 @@
                     <StackPanel Grid.Column="0" Spacing="2">
                         <TextBlock Text="解释器工具" FontSize="14" FontWeight="SemiBold" />
                         <TextBlock Text="配置不同版本的解释器，任务可通过名称引用"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                   FontSize="12" />
                     </StackPanel>
                     <Button Grid.Column="1" Classes="flatBtn" Padding="10,6"
                             Command="{Binding OpenAddToolCommand}"
@@ -77,8 +76,8 @@
                                                     CornerRadius="6" Padding="10,6" Margin="0,2">
                                                     <Grid ColumnDefinitions="*,Auto">
                                                         <StackPanel Grid.Column="0" Spacing="1">
-                                                            <TextBlock FontFamily="Consolas,Courier New,monospace"
-                                                                       FontSize="12" FontWeight="Medium">
+                                                          <TextBlock FontFamily="Consolas,Courier New,monospace"
+                                                                         FontSize="12" FontWeight="Medium">
                                                                 <TextBlock.Text>
                                                                     <MultiBinding StringFormat="{}{0} | {1}">
                                                                         <Binding Path="ToolType" />
@@ -87,21 +86,13 @@
                                                                 </TextBlock.Text>
                                                             </TextBlock>
                                                             <TextBlock Text="{Binding ExecutablePath}"
-                                                                       FontFamily="Consolas,Courier New,monospace"
-                                                                       FontSize="11"
-                                                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-                                                                       TextTrimming="CharacterEllipsis"
+                                                                        FontFamily="Consolas,Courier New,monospace"
+                                                                        FontSize="11"
+                                                                        TextTrimming="CharacterEllipsis"
                                                                        MaxWidth="240"
                                                                        HorizontalAlignment="Left" />
                                                         </StackPanel>
-                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
-                                                                    VerticalAlignment="Center">
-                                                            <TextBlock Text="默认"
-                                                                       FontFamily="Consolas,Courier New,monospace"
-                                                                       FontSize="10"
-                                                                       Foreground="{DynamicResource SystemAccentColor}"
-                                                                       IsVisible="{Binding IsDefault}" />
-                                                        </StackPanel>
+
                                                     </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -110,8 +101,7 @@
                                 <Button Classes="dashedBtn" Margin="0,4,0,0"
                                         Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenAddToolForGroupCommand}"
                                         CommandParameter="{Binding ToolType}">
-                                    <TextBlock Text="+ 添加版本" FontSize="12"
-                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                    <TextBlock Text="+ 添加版本" FontSize="12" />
                                 </Button>
                             </StackPanel>
                         </Border>

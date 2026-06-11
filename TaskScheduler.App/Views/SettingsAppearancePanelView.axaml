@@ -18,8 +18,7 @@
                     <StackPanel Spacing="2">
                         <TextBlock Text="主题模式" FontSize="14" FontWeight="SemiBold" />
                         <TextBlock Text="选择界面的明暗偏好，设置会立即生效并保存到本地"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                   FontSize="12" />
                     </StackPanel>
                 </Border>
                 <StackPanel Orientation="Horizontal" Spacing="0" Margin="0,4">
@@ -121,16 +120,14 @@
                     <StackPanel Spacing="2">
                         <TextBlock Text="界面密度" FontSize="14" FontWeight="SemiBold" />
                         <TextBlock Text="控制列表和表格的信息密度"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                   FontSize="12" />
                     </StackPanel>
                 </Border>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <StackPanel Grid.Column="0" Spacing="2">
                         <TextBlock Text="紧凑模式" FontSize="14" />
                         <TextBlock Text="减少行间距和内边距，单屏显示更多内容"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                   FontSize="12" />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding CompactMode}"
                                   OnContent="" OffContent="" />

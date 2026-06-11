@@ -36,7 +36,6 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <TextBlock Text="暂无即将执行的任务"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                        FontSize="13" Margin="20,12"
                                        IsVisible="{Binding !HasUpcomingTasks}" />
                         </Panel>
@@ -59,7 +58,6 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <TextBlock Text="暂无最近活动记录"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                        FontSize="13" Margin="20,12"
                                        IsVisible="{Binding !HasRecentActivities}" />
                         </Panel>

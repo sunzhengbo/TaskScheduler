@@ -122,7 +122,7 @@ public partial class CreateTaskDialogViewModel(
             };
 
             await taskSchedulerService.CreateTaskAsync(request, ct);
-            ViewModelBase.ShowToast("任务创建成功", NotificationType.Success);
+            ViewModelBase.ShowToast("任务创建成功");
         }
         catch (Exception ex)
         {

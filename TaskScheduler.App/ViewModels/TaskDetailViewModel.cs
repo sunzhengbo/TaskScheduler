@@ -124,7 +124,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         if (CurrentTask == null) return;
         await _taskService.PauseTaskAsync(CurrentTask.Name, CurrentTask.Group, ct);
         await LoadByNameCoreAsync(CurrentTask.Name, CurrentTask.Group);
-        ShowToast("任务已暂停", NotificationType.Success);
+        ShowToast("任务已暂停");
     }
 
     [RelayCommand]
@@ -133,7 +133,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         if (CurrentTask == null) return;
         await _taskService.ResumeTaskAsync(CurrentTask.Name, CurrentTask.Group, ct);
         await LoadByNameCoreAsync(CurrentTask.Name, CurrentTask.Group);
-        ShowToast("任务已恢复", NotificationType.Success);
+        ShowToast("任务已恢复");
     }
 
     [RelayCommand]
@@ -149,7 +149,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         if (result != MessageBoxResult.Yes) return;
 
         await _taskService.DeleteTaskAsync(CurrentTask.Name, CurrentTask.Group, ct);
-        ShowToast("任务已删除", NotificationType.Success);
+        ShowToast("任务已删除");
         _navigation.GoBack();
     }
 
@@ -172,7 +172,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         if (CurrentTask == null) return;
         await _taskService.TriggerJobAsync(CurrentTask.Name, CurrentTask.Group, ct);
         await LoadByNameCoreAsync(CurrentTask.Name, CurrentTask.Group);
-        ShowToast("任务已触发执行", NotificationType.Success);
+        ShowToast("任务已触发执行");
     }
 
     /// <summary>
@@ -190,7 +190,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         if (topLevel?.Clipboard != null)
         {
             await topLevel.Clipboard.SetTextAsync(text);
-            ShowToast("已成功复制到粘贴板", NotificationType.Success);
+            ShowToast("已成功复制到粘贴板");
         }
     }
 
@@ -236,7 +236,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         if (topLevel?.Clipboard != null)
         {
             await topLevel.Clipboard.SetTextAsync(text);
-            ShowToast("已成功复制到粘贴板", NotificationType.Success);
+            ShowToast("已成功复制到粘贴板");
         }
     }
 

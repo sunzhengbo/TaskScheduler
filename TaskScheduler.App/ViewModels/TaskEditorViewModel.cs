@@ -370,7 +370,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 await _taskService.CreateTaskAsync(request, ct);
             }
 
-            ShowToast("保存成功", NotificationType.Success);
+            ShowToast("保存成功");
             _navigation.GoBack();
         }
         catch (Exception ex)

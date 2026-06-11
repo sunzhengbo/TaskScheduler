@@ -8,7 +8,6 @@
         <TextBlock Grid.Column="0"
                    Text="{Binding Label, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
                    FontSize="14"
-                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                    VerticalAlignment="Center" />
         <TextBlock Grid.Column="2"
                    Text="{Binding Value, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"

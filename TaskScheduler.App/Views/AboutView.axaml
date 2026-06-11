@@ -22,15 +22,17 @@
                         <Border Width="56" Height="56" CornerRadius="12"
                                 Background="{DynamicResource SystemControlHighlightAccentBrush}">
                             <avalonia:MaterialIcon Kind="TimerCogOutline" Width="28" Height="28"
-                                                   Foreground="{DynamicResource SystemAccentColor}"
                                                    HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center" />
+                                                   VerticalAlignment="Center">
+                                <avalonia:MaterialIcon.Foreground>
+                                    <SolidColorBrush Color="{DynamicResource SystemAccentColor}" />
+                                </avalonia:MaterialIcon.Foreground>
+                            </avalonia:MaterialIcon>
                         </Border>
                         <StackPanel VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="TaskScheduler" FontSize="20" FontWeight="SemiBold" />
                             <TextBlock Text="跨平台任务调度系统"
-                                       FontSize="14"
-                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                                       FontSize="14" />
                         </StackPanel>
                     </StackPanel>
 

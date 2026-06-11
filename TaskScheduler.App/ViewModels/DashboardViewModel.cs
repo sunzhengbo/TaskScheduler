@@ -134,7 +134,7 @@ public partial class DashboardViewModel : ViewModelBase
             if (FailedCount > 0 && failedTaskName != null)
             {
                 // 尝试获取最近失败日志的时间
-                var recentLogs = await _logService.GetRecentLogsAsync(1, default);
+                var recentLogs = await _logService.GetRecentLogsAsync(1);
                 var failedLog = recentLogs.FirstOrDefault(l => l.Status == ExecutionStatus.Failed);
                 var timeText = failedLog != null ? FormatTimeAgo(failedLog.StartTime) : "最近";
                 FailedSub = $"{failedTaskName} · {timeText}";
@@ -172,7 +172,7 @@ public partial class DashboardViewModel : ViewModelBase
 
             // 最近活动：从执行日志获取
             var activities = new AvaloniaList<RecentActivityItem>();
-            var logs = await _logService.GetRecentLogsAsync(5, default);
+            var logs = await _logService.GetRecentLogsAsync(5);
 
             foreach (var log in logs)
             {

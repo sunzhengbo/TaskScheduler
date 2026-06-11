@@ -161,7 +161,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
                 _logger.LogError(ex, "立即执行任务失败: {TaskName}", SelectedTask.Name);
                 ShowToast("立即执行任务失败", NotificationType.Error);
             }
-            ShowToast("任务已触发执行", NotificationType.Success);
+            ShowToast("任务已触发执行");
     }
 
     [RelayCommand]
@@ -178,7 +178,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
                 _logger.LogError(ex, "暂停任务失败: {TaskName}", SelectedTask.Name);
                 ShowToast("暂停任务失败", NotificationType.Error);
             }
-            ShowToast("任务已暂停", NotificationType.Success);
+            ShowToast("任务已暂停");
     }
 
     [RelayCommand]
@@ -195,7 +195,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
                 _logger.LogError(ex, "恢复任务失败: {TaskName}", SelectedTask.Name);
                 ShowToast("恢复任务失败", NotificationType.Error);
             }
-            ShowToast("任务已恢复", NotificationType.Success);
+            ShowToast("任务已恢复");
     }
 
     [RelayCommand]
@@ -220,7 +220,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
                 _logger.LogError(ex, "删除任务失败: {TaskName}", SelectedTask.Name);
                 ShowToast("删除任务失败", NotificationType.Error);
             }
-            ShowToast("任务已删除", NotificationType.Success);
+            ShowToast("任务已删除");
     }
 
     [RelayCommand]
@@ -271,7 +271,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
                 _logger.LogError(ex, "立即执行任务失败: {TaskName}", task.Name);
                 ShowToast("立即执行任务失败", NotificationType.Error);
             }
-            ShowToast("任务已触发执行", NotificationType.Success);
+            ShowToast("任务已触发执行");
     }
 
     /// <summary>
@@ -315,7 +315,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
             var exportModel = TaskExportModel.FromTask(task, task.CommandJson);
             var text = exportModel.ToJson();
             await topLevel.Clipboard.SetTextAsync(text);
-            ShowToast("已成功复制到粘贴板", NotificationType.Success);
+            ShowToast("已成功复制到粘贴板");
         }
     }
 

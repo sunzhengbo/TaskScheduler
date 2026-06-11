@@ -8,11 +8,11 @@
             BorderThickness="1">
         <StackPanel Spacing="4">
             <TextBlock x:Name="LabelBlock" Text="{Binding Label, RelativeSource={RelativeSource AncestorType=local:StatCard}}"
-                       FontSize="13" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                       FontSize="13" />
             <TextBlock x:Name="ValueBlock" Text="{Binding Value, RelativeSource={RelativeSource AncestorType=local:StatCard}}"
                        FontSize="32" FontWeight="Bold" />
             <TextBlock x:Name="SubBlock" Text="{Binding Sub, RelativeSource={RelativeSource AncestorType=local:StatCard}}"
-                       FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                       FontSize="12"
                        IsVisible="{Binding Sub, RelativeSource={RelativeSource AncestorType=local:StatCard}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
     </Border>

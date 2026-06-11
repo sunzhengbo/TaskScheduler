@@ -16,18 +16,15 @@
                 <StackPanel Spacing="2">
                     <TextBlock Text="调度引擎" FontSize="14" FontWeight="SemiBold" />
                     <TextBlock Text="配置任务调度核心运行参数"
-                               FontSize="12"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                               FontSize="12" />
                 </StackPanel>
             </Border>
             <!-- 开机自启动 -->
             <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                 <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="开机自启动" FontSize="13" FontWeight="Medium"
-                               Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                    <TextBlock Text="开机自启动" FontSize="13" FontWeight="Medium" />
                     <TextBlock Text="系统启动时自动运行 TaskScheduler，确保定时任务不会因忘记手动启动而漏执行"
                                FontSize="12"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                TextWrapping="Wrap" />
                 </StackPanel>
                 <ToggleSwitch Grid.Column="1"
@@ -39,11 +36,9 @@
             <Grid ColumnDefinitions="*,Auto" Margin="0,4"
                   IsEnabled="{Binding StartupEnabled}">
                 <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="启动时最小化" FontSize="13" FontWeight="Medium"
-                               Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                    <TextBlock Text="启动时最小化" FontSize="13" FontWeight="Medium" />
                     <TextBlock Text="开机自启动时自动最小化到系统托盘，不显示主窗口"
                                FontSize="12"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                TextWrapping="Wrap" />
                 </StackPanel>
                 <ToggleSwitch Grid.Column="1"
@@ -55,36 +50,30 @@
             <Grid ColumnDefinitions="*,*" ColumnSpacing="16" Margin="0,4">
                 <StackPanel Grid.Column="0" Spacing="4">
                     <TextBlock Text="日志保留天数" FontSize="13"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                FontWeight="Medium" />
                     <TextBox Text="{Binding LogRetentionDays}" Width="200"
                              HorizontalAlignment="Left" />
                     <TextBlock Text="超过该天数的执行日志将被自动清理"
-                               FontSize="12"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                               FontSize="12" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="4">
                     <TextBlock Text="最大线程数" FontSize="13"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                FontWeight="Medium" />
                     <TextBox Text="{Binding MaxThreads}" Width="200"
                              HorizontalAlignment="Left" />
                     <TextBlock Text="同时执行的任务上限，超出部分将排队等待"
-                               FontSize="12"
-                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                               FontSize="12" />
                 </StackPanel>
             </Grid>
             <StackPanel Spacing="4" Margin="0,4">
                 <TextBlock Text="数据库类型" FontSize="13"
-                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                            FontWeight="Medium" />
                 <ComboBox ItemsSource="{Binding DatabaseTypes}"
                           SelectedItem="{Binding DatabaseType}"
                           Width="300"
                           HorizontalAlignment="Left" />
                 <TextBlock Text="当前仅支持 SQLite，数据文件存储在本地"
-                           FontSize="12"
-                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                           FontSize="12" />
             </StackPanel>
         </StackPanel>
     </Border>

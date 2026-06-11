@@ -163,7 +163,6 @@
                                     Text="{Binding Triggers[0].NextFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
                                     FontFamily="Consolas,Courier New,monospace"
                                     FontSize="12" VerticalAlignment="Center"
-                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                     Margin="4,0" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -177,7 +176,6 @@
                                     Text="{Binding Triggers[0].PreviousFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
                                     FontFamily="Consolas,Courier New,monospace"
                                     FontSize="12" VerticalAlignment="Center"
-                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                                     Margin="4,0" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

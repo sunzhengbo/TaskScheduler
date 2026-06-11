@@ -151,7 +151,7 @@ public partial class EditTaskDialogViewModel : ObservableObject
             };
 
             await _taskSchedulerService.UpdateTaskAsync(_originalTask.Name, _originalTask.Group, request, ct);
-            ViewModelBase.ShowToast("保存成功", NotificationType.Success);
+            ViewModelBase.ShowToast("保存成功");
         }
         catch (Exception ex)
         {

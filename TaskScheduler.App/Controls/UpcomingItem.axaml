@@ -17,7 +17,6 @@
                            FontWeight="Medium" FontSize="14" />
                 <TextBlock Text="{Binding Description, RelativeSource={RelativeSource AncestorType=local:UpcomingItem}}"
                            FontSize="12"
-                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <!-- 时间右对齐 -->
