@@ -31,11 +31,8 @@
                 <!-- Brand 区域 -->
                 <Border DockPanel.Dock="Top" Height="60" Padding="16,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-                        <avalonia:MaterialIcon Kind="TimerCogOutline" Width="28" Height="28">
-                            <avalonia:MaterialIcon.Foreground>
-                                <SolidColorBrush Color="{DynamicResource SystemAccentColor}" />
-                            </avalonia:MaterialIcon.Foreground>
-                        </avalonia:MaterialIcon>
+                        <avalonia:MaterialIcon Kind="TimerCogOutline" Width="28" Height="28"
+                                               Foreground="{DynamicResource SystemAccentColor}" />
                         <TextBlock Text="TaskScheduler" FontSize="16" FontWeight="Bold"
                                    x:Name="BrandText"
                                    VerticalAlignment="Center" />

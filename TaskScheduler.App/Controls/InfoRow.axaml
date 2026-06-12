@@ -5,14 +5,14 @@
              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
     <Grid ColumnDefinitions="*,16,Auto" Margin="0,4"
           HorizontalAlignment="Stretch">
-        <TextBlock Grid.Column="0"
-                   Text="{Binding Label, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
-                   FontSize="14"
-                   VerticalAlignment="Center" />
-        <TextBlock Grid.Column="2"
-                   Text="{Binding Value, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
-                   FontSize="14" FontWeight="Medium"
-                   VerticalAlignment="Center"
-                   TextWrapping="Wrap" />
+        <SelectableTextBlock Grid.Column="0"
+                              Text="{Binding Label, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
+                              FontSize="14"
+                              VerticalAlignment="Center" />
+        <SelectableTextBlock Grid.Column="2"
+                              Text="{Binding Value, RelativeSource={RelativeSource AncestorType=local:InfoRow}}"
+                              FontSize="14" FontWeight="Medium"
+                              VerticalAlignment="Center"
+                              TextWrapping="Wrap" />
     </Grid>
 </UserControl>
