@@ -112,7 +112,7 @@
                                                 <StackPanel Spacing="2">
                                                     <TextBlock Text="环境变量" FontSize="11" />
                                                     <TextBox Text="{Binding EnvVariables, Mode=TwoWay}"
-                                                             Watermark="可选，用分号分隔"
+                                                              PlaceholderText="可选，用分号分隔"
                                                              FontFamily="Consolas,Courier New,monospace"
                                                              FontSize="12" />
                                                 </StackPanel>

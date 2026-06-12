@@ -188,7 +188,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             UseBootTime = task.UseBootTime;
 
             // 从触发器加载
-            if (task.Triggers.Count > 0)
+            if (task.Triggers is { Count: > 0 })
             {
                 var trigger = task.Triggers[0];
                 // 必须显式设置 IsCronType，因为 SelectedTriggerType 默认值可能与触发类型相同，

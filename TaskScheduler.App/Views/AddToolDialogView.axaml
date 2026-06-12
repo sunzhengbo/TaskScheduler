@@ -53,18 +53,18 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="版本名称" FontSize="13" FontWeight="Medium" />
-                            <TextBox Text="{Binding NewToolVersion}" Watermark="如: python3.12"
+                             <TextBox Text="{Binding NewToolVersion}" PlaceholderText="如: python3.12"
                                      FontFamily="Consolas,Courier New,monospace" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="可执行文件路径" FontSize="13" FontWeight="Medium" />
-                            <TextBox Text="{Binding NewToolPath}" Watermark="如: /usr/bin/python3.12"
+                             <TextBox Text="{Binding NewToolPath}" PlaceholderText="如: /usr/bin/python3.12"
                                      FontFamily="Consolas,Courier New,monospace" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="环境变量（可选）" FontSize="13" FontWeight="Medium" />
                             <TextBox Text="{Binding NewToolEnvVariables}"
-                                     Watermark="如: PYTHONPATH=/opt/lib;PATH=/opt/bin"
+                                     PlaceholderText="如: PYTHONPATH=/opt/lib;PATH=/opt/bin"
                                      FontFamily="Consolas,Courier New,monospace" />
                             <TextBlock Text="用分号分隔多个环境变量，执行任务时会注入到进程中"
                                        FontSize="12" />

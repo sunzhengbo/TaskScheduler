@@ -31,7 +31,7 @@
                         <Run Text="全部任务 · " />
                         <Run Text="{Binding FilteredTasks.Count}" />
                     </TextBlock>
-                    <TextBox Width="200" Watermark="搜索任务名称..."
+                     <TextBox Width="200" PlaceholderText="搜索任务名称..."
                              Text="{Binding SearchText}"
                              FontSize="13" Padding="8,4" />
                     <ComboBox ItemsSource="{Binding FilterOptions}"

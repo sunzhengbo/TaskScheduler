@@ -34,7 +34,7 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="任务名称 *" FontSize="13"
                                        />
-                            <TextBox Text="{Binding TaskName}" Watermark="例如：数据库备份"
+                             <TextBox Text="{Binding TaskName}" PlaceholderText="例如：数据库备份"
                                      IsEnabled="{Binding !IsEditMode}" />
                         </StackPanel>
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
@@ -54,7 +54,7 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="描述" FontSize="13"
                                        />
-                            <TextBox Text="{Binding Description}" Watermark="简要描述这个任务的用途…"
+                             <TextBox Text="{Binding Description}" PlaceholderText="简要描述这个任务的用途…"
                                      AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
                         </StackPanel>
                     </StackPanel>
@@ -121,7 +121,7 @@
                         <StackPanel Spacing="4" IsVisible="{Binding IsCronType}">
                             <TextBlock Text="Cron 表达式 *" FontSize="13"
                                        />
-                            <TextBox Text="{Binding CronExpression}" Watermark="例如: 0/5 * * * ?"
+                             <TextBox Text="{Binding CronExpression}" PlaceholderText="例如: 0/5 * * * ?"
                                      FontFamily="Consolas,Courier New,monospace" />
                             <TextBlock Text="[秒] 分 时 日 月 周 [年]（秒和年可选）"
                                        FontSize="12" />
@@ -200,7 +200,7 @@
                         <TextBlock Text="命令内容" FontSize="13"
                                    />
                         <TextBox Text="{Binding Command.Content}"
-                                 Watermark="输入要执行的命令…"
+                                  PlaceholderText="输入要执行的命令…"
                                  AcceptsReturn="True" TextWrapping="Wrap" Height="120"
                                  FontFamily="Consolas,Courier New,monospace"
                                  FontSize="13" />
