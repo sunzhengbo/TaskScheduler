@@ -46,7 +46,7 @@ public class CommandJob(
 
         try
         {
-            var result = await commandExecutor.ExecuteCommandAsync(command.Content, command.Type, context.CancellationToken);
+            var result = await commandExecutor.ExecuteCommandAsync(command.Content, command.Type, command.InterpreterPath, context.CancellationToken);
             lastExitCode = result.ExitCode;
             logger.LogInformation("命令 '{CommandName}' 执行完成 (退出码: {ExitCode})", command.Name, result.ExitCode);
 

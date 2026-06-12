@@ -12,9 +12,9 @@ public static class CommandTypes
 {
     public const string Cmd = "命令提示符 (cmd)";
     public const string PowerShell = "PowerShell";
-    public const string Python = "Python 脚本";
-    public const string Shell = "Shell 脚本";
-    public const string NodeJs = "Node.js 脚本";
+    public const string Python = "Python";
+    public const string Shell = "Bash";
+    public const string NodeJs = "Node.js";
 }
 
 public partial class CommandModel : ObservableObject

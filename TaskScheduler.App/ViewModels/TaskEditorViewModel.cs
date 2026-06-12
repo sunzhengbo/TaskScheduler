@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,8 +73,15 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
     partial void OnIsEditModeChanged(bool value) => OnPropertyChanged(nameof(PageTitle));
 
-    [ObservableProperty] private AvaloniaList<string> _availableCommandTypes = [CommandTypes.Cmd];
+    partial void OnSelectedCommandTypeChanged(string value)
+    {
+        Command.Type = value;
+        UpdateInterpreterVersions();
+    }
+
+    [ObservableProperty] private AvaloniaList<string> _availableCommandTypes = [];
     [ObservableProperty] private AvaloniaList<string> _availableInterpreterVersions = [];
+    [ObservableProperty] private string _selectedCommandType = CommandTypes.PowerShell;
 
     public AvaloniaList<string> AvailableGroups { get; } = ["DEFAULT", "SYSTEM", "USER", "DAEMON"];
     public AvaloniaList<TaskPriority> AvailablePriorities { get; } = [TaskPriority.Low, TaskPriority.Normal, TaskPriority.High];
@@ -107,15 +113,9 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         {
             _allTools = await _toolConfigService.GetAllToolsAsync();
 
-            // 始终包含 Cmd（内置命令提示符，无需工具配置）
-            var commandTypes = new List<string> { CommandTypes.Cmd };
-            foreach (var toolType in _allTools.Select(t => t.ToolType).Distinct())
-            {
-                var ct = MapToolTypeToCommandType(toolType);
-                if (!commandTypes.Contains(ct))
-                    commandTypes.Add(ct);
-            }
-            AvailableCommandTypes = new AvaloniaList<string>(commandTypes);
+            // 命令类型与设置面板的工具类型保持一致
+            AvailableCommandTypes = new AvaloniaList<string>(
+                ["Python", "PowerShell", "Node.js", "Bash"]);
 
             UpdateInterpreterVersions();
         }
@@ -130,31 +130,11 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     }
 
     /// <summary>
-    /// 当 Command 或其 Type 属性变更时，刷新解释器版本列表。
+    /// 当 Command 对象变更时，同步解释器版本列表。
     /// </summary>
     partial void OnCommandChanged(CommandModel value)
     {
-        if (_commandSubscription != null)
-        {
-            _commandSubscription.PropertyChanged -= OnCommandPropertyChanged;
-            _commandSubscription = null;
-        }
-
-        if (value != null)
-        {
-            _commandSubscription = value;
-            value.PropertyChanged += OnCommandPropertyChanged;
-        }
-
         UpdateInterpreterVersions();
-    }
-
-    private CommandModel? _commandSubscription;
-
-    private void OnCommandPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(CommandModel.Type))
-            UpdateInterpreterVersions();
     }
 
     /// <summary>
@@ -181,21 +161,12 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             Command.InterpreterVersion = versions.Count > 0 ? versions[0] : null;
     }
 
-    private static string MapToolTypeToCommandType(string toolType) => toolType switch
-    {
-        "Python" => CommandTypes.Python,
-        "PowerShell" => CommandTypes.PowerShell,
-        "Node.js" => CommandTypes.NodeJs,
-        "Shell" => CommandTypes.Shell,
-        _ => toolType
-    };
-
     private static string? MapCommandTypeToToolType(string commandType) => commandType switch
     {
-        CommandTypes.Python => "Python",
-        CommandTypes.PowerShell => "PowerShell",
-        CommandTypes.NodeJs => "Node.js",
-        CommandTypes.Shell => "Shell",
+        CommandTypes.Python or "Python 脚本" => "Python",
+        CommandTypes.PowerShell or "PowerShell" => "PowerShell",
+        CommandTypes.NodeJs or "Node.js 脚本" => "Node.js",
+        CommandTypes.Shell or "Shell 脚本" or "Shell" => "Bash",
         _ => null // Cmd 等内置类型无对应 ToolConfig
     };
 
@@ -237,6 +208,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 if (cmd != null)
                 {
                     Command = cmd;
+                    SelectedCommandType = cmd.Type;
                 }
             }
             catch (Exception ex)
@@ -263,7 +235,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         try
         {
             var result = await _commandExecutor.ExecuteCommandAsync(
-                Command.Content, Command.Type);
+                Command.Content, Command.Type, Command.InterpreterPath);
             var text = $"退出码: {result.ExitCode}";
             if (!string.IsNullOrEmpty(result.Output))
                 text += $"\n输出:\n{result.Output}";

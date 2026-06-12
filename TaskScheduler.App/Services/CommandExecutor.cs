@@ -11,7 +11,7 @@ namespace TaskScheduler.App.Services;
 
 public interface ICommandExecutor
 {
-    Task<CommandResult> ExecuteCommandAsync(string command, string type, CancellationToken ct = default);
+    Task<CommandResult> ExecuteCommandAsync(string command, string type, string? interpreterPath = null, CancellationToken ct = default);
 }
 
 public record CommandResult(int ExitCode, string Output, string Error);
@@ -25,10 +25,10 @@ public class CommandExecutor : ICommandExecutor
         _logger = logger;
     }
 
-    public async Task<CommandResult> ExecuteCommandAsync(string command, string type, CancellationToken ct = default)
+    public async Task<CommandResult> ExecuteCommandAsync(string command, string type, string? interpreterPath = null, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
-        _logger.LogInformation("Executing command (Type: {Type})", type);
+        _logger.LogInformation("Executing command (Type: {Type}, InterpreterPath: {InterpreterPath})", type, interpreterPath);
 
         var processStartInfo = new ProcessStartInfo
         {
@@ -50,7 +50,7 @@ public class CommandExecutor : ICommandExecutor
                 break;
 
             case CommandTypes.Python:
-                processStartInfo.FileName = "python";
+                processStartInfo.FileName = !string.IsNullOrWhiteSpace(interpreterPath) ? interpreterPath : "python";
                 processStartInfo.ArgumentList.Add("-c");
                 processStartInfo.ArgumentList.Add(command);
                 break;
@@ -62,7 +62,7 @@ public class CommandExecutor : ICommandExecutor
                 break;
 
             case CommandTypes.NodeJs:
-                processStartInfo.FileName = "node";
+                processStartInfo.FileName = !string.IsNullOrWhiteSpace(interpreterPath) ? interpreterPath : "node";
                 processStartInfo.ArgumentList.Add("-e");
                 processStartInfo.ArgumentList.Add(command);
                 break;

@@ -164,7 +164,7 @@
                         <TextBlock Text="命令类型" FontSize="13"
                                    />
                         <ComboBox ItemsSource="{Binding AvailableCommandTypes}"
-                                  SelectedItem="{Binding Command.Type}"
+                                  SelectedItem="{Binding SelectedCommandType}"
                                   HorizontalAlignment="Stretch" />
                     </StackPanel>
                     <!-- 解释器版本 -->

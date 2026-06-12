@@ -76,7 +76,8 @@ public partial class CreateTaskDialogViewModel(
         {
             var result = await commandExecutor.ExecuteCommandAsync(
                 Command.Content,
-                Command.Type);
+                Command.Type,
+                Command.InterpreterPath);
 
             CommandOutput = $"退出码: {result.ExitCode}\n输出:\n{result.Output}";
         }

@@ -9,7 +9,7 @@ public partial class CommandBlock : UserControl
         AvaloniaProperty.Register<CommandBlock, string>(nameof(CommandName), "Command");
 
     public static readonly StyledProperty<string> CommandTypeProperty =
-        AvaloniaProperty.Register<CommandBlock, string>(nameof(CommandType), "Shell");
+        AvaloniaProperty.Register<CommandBlock, string>(nameof(CommandType), "Bash");
 
     public static readonly StyledProperty<string> CommandBodyProperty =
         AvaloniaProperty.Register<CommandBlock, string>(nameof(CommandBody), string.Empty);
