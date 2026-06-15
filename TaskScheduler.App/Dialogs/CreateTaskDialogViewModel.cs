@@ -58,8 +58,21 @@ public partial class CreateTaskDialogViewModel(
     public AvaloniaList<TriggerType> AvailableTriggerTypes { get; } =
         new() { TriggerType.Simple, TriggerType.Cron };
 
-    public AvaloniaList<string> AvailableCommandTypes { get; } =
-        new() { CommandTypes.Cmd, CommandTypes.PowerShell, CommandTypes.Python, CommandTypes.Shell, CommandTypes.NodeJs };
+    public AvaloniaList<string> AvailableCommandTypes { get; } = BuildAvailableCommandTypes();
+
+    private static AvaloniaList<string> BuildAvailableCommandTypes()
+    {
+        var types = new AvaloniaList<string>
+        {
+            CommandTypes.PowerShell, CommandTypes.Python, CommandTypes.Shell, CommandTypes.NodeJs
+        };
+        if (OperatingSystem.IsWindows())
+        {
+            types.Add(CommandTypes.Cmd);
+            types.Add(CommandTypes.VBScript);
+        }
+        return types;
+    }
 
     partial void OnRepeatIntervalMinutesChanged(int value)
     {

@@ -15,6 +15,7 @@ public static class CommandTypes
     public const string Python = "Python";
     public const string Shell = "Bash";
     public const string NodeJs = "Node.js";
+    public const string VBScript = "VBScript";
 }
 
 public partial class CommandModel : ObservableObject

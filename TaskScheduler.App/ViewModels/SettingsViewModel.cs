@@ -438,6 +438,7 @@ public partial class SettingsViewModel : ViewModelBase
         "Ruby" => ("Rb", "#3776ab"),
         "Go" => ("Go", "#3776ab"),
         "Java" => ("Jv", "#3776ab"),
+        "VBScript" => ("VB", "#3776ab"),
         _ => (toolType.Length >= 2 ? toolType[..2] : toolType, "#3776ab")
     };
 }

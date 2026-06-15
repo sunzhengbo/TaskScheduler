@@ -257,6 +257,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
             "Python 脚本" => ".py",
             "Shell 脚本" => ".sh",
             "Node.js 脚本" => ".js",
+            "VBScript" => ".vbs",
             _ => ".bat"
         };
 

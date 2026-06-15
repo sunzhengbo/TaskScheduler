@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,6 +35,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     private ScheduledTaskDetail? _editingTask;
     private IReadOnlyList<ToolConfig> _allTools = Array.Empty<ToolConfig>();
     private readonly TaskCompletionSource _toolsLoaded = new();
+    private readonly CancellationTokenSource _cts = new();
 
     [ObservableProperty] private string _taskName = string.Empty;
     [ObservableProperty] private string _group = "DEFAULT";
@@ -82,6 +84,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private AvaloniaList<string> _availableCommandTypes = [];
     [ObservableProperty] private AvaloniaList<string> _availableInterpreterVersions = [];
     [ObservableProperty] private string _selectedCommandType = CommandTypes.PowerShell;
+    [ObservableProperty] private string? _builtInInterpreterPath;
 
     public AvaloniaList<string> AvailableGroups { get; } = ["DEFAULT", "SYSTEM", "USER", "DAEMON"];
     public AvaloniaList<TaskPriority> AvailablePriorities { get; } = [TaskPriority.Low, TaskPriority.Normal, TaskPriority.High];
@@ -114,8 +117,16 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             _allTools = await _toolConfigService.GetAllToolsAsync();
 
             // 命令类型与设置面板的工具类型保持一致
-            AvailableCommandTypes = new AvaloniaList<string>(
-                ["Python", "PowerShell", "Node.js", "Bash"]);
+            var commandTypes = new List<string>
+            {
+                CommandTypes.Python, CommandTypes.PowerShell, CommandTypes.NodeJs, CommandTypes.Shell
+            };
+            if (OperatingSystem.IsWindows())
+            {
+                commandTypes.Add(CommandTypes.Cmd);
+                commandTypes.Add(CommandTypes.VBScript);
+            }
+            AvailableCommandTypes = new AvaloniaList<string>(commandTypes);
 
             UpdateInterpreterVersions();
         }
@@ -145,11 +156,13 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         var toolType = MapCommandTypeToToolType(Command.Type);
         if (toolType == null)
         {
-            // Cmd 等内置类型无需选择解释器版本
+            // 内置类型（Cmd、VBScript）无 ToolConfig，自动检测系统解释器路径
             AvailableInterpreterVersions = [];
+            BuiltInInterpreterPath = DetectBuiltInInterpreterPath(Command.Type);
             return;
         }
 
+        BuiltInInterpreterPath = null;
         var versions = _allTools
             .Where(t => t.ToolType == toolType)
             .Select(t => $"{t.VersionName} ({t.ExecutablePath})")
@@ -161,13 +174,57 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             Command.InterpreterVersion = versions.Count > 0 ? versions[0] : null;
     }
 
+    /// <summary>
+    /// 为内置命令类型（Cmd、VBScript）自动检测系统解释器的可执行文件路径。
+    /// </summary>
+    private static string? DetectBuiltInInterpreterPath(string commandType)
+    {
+        var exeName = commandType switch
+        {
+            CommandTypes.Cmd => "cmd.exe",
+            CommandTypes.VBScript => "cscript.exe",
+            _ => null
+        };
+        if (exeName == null) return null;
+
+        // 优先从 PATH 环境变量中查找
+        var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator);
+        foreach (var dir in pathDirs)
+        {
+            var trimmed = dir.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+                continue;
+            try
+            {
+                var fullPath = Path.Combine(trimmed, exeName);
+                if (File.Exists(fullPath))
+                    return fullPath;
+            }
+            catch (IOException)
+            {
+                // 跳过无效的 PATH 条目
+            }
+        }
+
+        // 回退到系统目录
+        if (OperatingSystem.IsWindows())
+        {
+            var systemPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), exeName);
+            if (File.Exists(systemPath))
+                return systemPath;
+        }
+
+        return null;
+    }
+
     private static string? MapCommandTypeToToolType(string commandType) => commandType switch
     {
         CommandTypes.Python or "Python 脚本" => "Python",
         CommandTypes.PowerShell or "PowerShell" => "PowerShell",
         CommandTypes.NodeJs or "Node.js 脚本" => "Node.js",
         CommandTypes.Shell or "Shell 脚本" or "Shell" => "Bash",
-        _ => null // Cmd 等内置类型无对应 ToolConfig
+        _ => null // Cmd、VBScript 等内置类型无对应 ToolConfig
     };
 
     public void OnParameterReceived(object parameter)
@@ -223,7 +280,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 {
                     UpdateInterpreterVersions();
                 });
-            });
+            }, _cts.Token);
         }
     }
 
@@ -343,6 +400,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 await _taskService.CreateTaskAsync(request, ct);
             }
 
+            _cts.Cancel();
             ShowToast("保存成功");
             _navigation.GoBack();
         }
@@ -372,5 +430,9 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     }
 
     [RelayCommand]
-    private void Cancel() => _navigation.GoBack();
+    private void Cancel()
+    {
+        _cts.Cancel();
+        _navigation.GoBack();
+    }
 }

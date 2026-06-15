@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:conv="using:TaskScheduler.App.Converters"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="900"
              x:Class="TaskScheduler.App.Views.TaskEditorView"
              x:DataType="vm:TaskEditorViewModel">
@@ -174,8 +175,9 @@
                                   SelectedItem="{Binding SelectedCommandType}"
                                   HorizontalAlignment="Stretch" />
                     </StackPanel>
-                    <!-- 解释器版本 -->
-                    <StackPanel Spacing="4">
+                    <!-- 解释器版本（仅在有可用版本时显示，Cmd/VBScript 等内置类型无可选版本） -->
+                    <StackPanel Spacing="4"
+                                IsVisible="{Binding AvailableInterpreterVersions.Count, Converter={x:Static conv:IntGreaterThanZeroConverter.Instance}}">
                         <TextBlock Text="解释器版本" FontSize="13"
                                   >
                             <ToolTip.Tip>
@@ -185,6 +187,22 @@
                         <ComboBox ItemsSource="{Binding AvailableInterpreterVersions}"
                                   SelectedItem="{Binding Command.InterpreterVersion}"
                                   HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <!-- 内置解释器路径（Cmd/VBScript 等内置类型自动检测的系统路径） -->
+                    <StackPanel Spacing="4"
+                                IsVisible="{Binding BuiltInInterpreterPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="解释器路径" FontSize="13" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding BuiltInInterpreterPath}"
+                                       FontSize="11" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1" Classes="Flat" Padding="4,2"
+                                    FontSize="11"
+                                    Content="复制路径"
+                                    Command="{Binding CopyInterpreterPathCommand}"
+                                    CommandParameter="{Binding BuiltInInterpreterPath}" />
+                        </Grid>
                     </StackPanel>
                     <!-- 解释器路径提示 -->
                     <StackPanel Spacing="4"
