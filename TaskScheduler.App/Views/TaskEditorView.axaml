@@ -141,8 +141,15 @@
                             </StackPanel>
                         </Grid>
                         <CheckBox Content="使用开机时间作为起始时间" IsChecked="{Binding UseBootTime}"
-                                  IsVisible="{Binding IsSimpleType}"
-                                  />
+                                  IsVisible="{Binding IsSimpleType}">
+                            <ToolTip.Tip>
+                                <StackPanel Spacing="6" MaxWidth="320">
+                                    <TextBlock Text="起始时间模式" FontWeight="SemiBold" FontSize="13" />
+                                    <TextBlock Text="开启：以系统开机时间为基准，调度时间固定对齐，重启应用不会漂移。" FontSize="12" TextWrapping="Wrap" />
+                                    <TextBlock Text="关闭：以应用启动时间为基准，首次执行需等待一个间隔周期，每次重启应用后时间网格重新计算。" FontSize="12" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </ToolTip.Tip>
+                        </CheckBox>
                     </StackPanel>
                 </Border>
             </Grid>

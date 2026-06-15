@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Quartz;
 using Quartz.Impl.Matchers;
 using Quartz.Impl.Triggers;
@@ -8,10 +9,12 @@ namespace TaskScheduler.Core.Services;
 public class TaskSchedulerService : ITaskSchedulerService
 {
     private readonly IScheduler _scheduler;
+    private readonly ILogger<TaskSchedulerService> _logger;
 
-    public TaskSchedulerService(IScheduler scheduler)
+    public TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerService> logger)
     {
         _scheduler = scheduler;
+        _logger = logger;
     }
 
     /// <summary>
@@ -47,6 +50,28 @@ public class TaskSchedulerService : ITaskSchedulerService
         return cronExpression;
     }
 
+    private static DateTimeOffset CalculateStartTime(bool useBootTime, TimeSpan interval)
+    {
+        return useBootTime
+            ? DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64) + interval
+            : DateTimeOffset.UtcNow.Add(interval);
+    }
+
+    private static string GetTriggerName(string jobName) => $"{jobName}_trigger";
+
+    /// <summary>
+    /// 计算 SimpleTrigger 重新调度后的剩余触发次数。
+    /// Quartz 中 RepeatCount=N 表示总触发 N+1 次，TimesTriggered 为已触发次数。
+    /// 剩余总次数 = RepeatCount + 1 - TimesTriggered，
+    /// 但 WithRepeatCount(M) 创建的新触发器总触发 M+1 次，
+    /// 因此需设为 (剩余总次数 - 1) = RepeatCount - TimesTriggered。
+    /// </summary>
+    private static int CalculateRemainingCount(int repeatCount, int timesTriggered)
+    {
+        if (repeatCount == -1) return -1;
+        return Math.Max(0, repeatCount - timesTriggered);
+    }
+
     public async Task<string> CreateTaskAsync(TaskCreateRequest request, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
@@ -72,17 +97,18 @@ public class TaskSchedulerService : ITaskSchedulerService
             .Build();
 
         ITrigger trigger;
-        var triggerKey = new TriggerKey($"{request.Name}_trigger", request.Group);
+        var triggerKey = new TriggerKey(GetTriggerName(request.Name), request.Group);
 
         if (request.TriggerType == TriggerType.Simple)
         {
+            var startTime = CalculateStartTime(request.UseBootTime, request.RepeatInterval);
             trigger = TriggerBuilder.Create()
                 .WithIdentity(triggerKey)
                 .WithSimpleSchedule(x => x
                     .WithRepeatCount(request.RepeatCount)
                     .WithInterval(request.RepeatInterval)
                     .WithMisfireHandlingInstructionNextWithRemainingCount())
-                .StartAt(DateTimeOffset.UtcNow.Add(request.RepeatInterval))
+                .StartAt(startTime)
                 .Build();
         }
         else
@@ -252,7 +278,7 @@ public class TaskSchedulerService : ITaskSchedulerService
         await _scheduler.RescheduleJob(triggerKey, newTrigger, ct);
     }
 
-    public async Task UpdateSimpleTriggerAsync(string triggerName, string triggerGroup, int repeatCount, TimeSpan interval, CancellationToken ct = default)
+    public async Task UpdateSimpleTriggerAsync(string triggerName, string triggerGroup, int repeatCount, TimeSpan interval, CancellationToken ct = default, bool useBootTime = false)
     {
         var triggerKey = new TriggerKey(triggerName, triggerGroup);
         var oldTrigger = await _scheduler.GetTrigger(triggerKey, ct);
@@ -261,16 +287,84 @@ public class TaskSchedulerService : ITaskSchedulerService
             throw new InvalidOperationException($"Trigger '{triggerGroup}.{triggerName}' not found.");
         }
 
+        var startTime = CalculateStartTime(useBootTime, interval);
         var newTrigger = TriggerBuilder.Create()
             .WithIdentity(triggerKey)
             .WithSimpleSchedule(x => x
                 .WithRepeatCount(repeatCount)
                 .WithInterval(interval)
                 .WithMisfireHandlingInstructionNextWithRemainingCount())
-            .StartAt(DateTimeOffset.UtcNow.Add(interval))
+            .StartAt(startTime)
             .Build();
 
         await _scheduler.RescheduleJob(triggerKey, newTrigger, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task RescheduleAllSimpleTriggersAsync(CancellationToken ct = default)
+    {
+        var jobKeys = await _scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct);
+        var count = 0;
+
+        foreach (var jobKey in jobKeys)
+        {
+            var jobDetail = await _scheduler.GetJobDetail(jobKey, ct);
+            if (jobDetail == null) continue;
+
+            var triggers = await _scheduler.GetTriggersOfJob(jobKey, ct);
+            foreach (var trigger in triggers)
+            {
+                if (trigger is not ISimpleTrigger simpleTrigger) continue;
+
+                // 只处理任务自身的命名触发器
+                var expectedName = GetTriggerName(jobKey.Name);
+                if (trigger.Key.Name != expectedName) continue;
+
+                var useBootTime = false;
+                if (jobDetail.JobDataMap.TryGetValue("UseBootTime", out var bootVal))
+                {
+                    useBootTime = bool.TryParse(bootVal?.ToString(), out var b) && b;
+                }
+
+                var interval = simpleTrigger.RepeatInterval;
+                if (interval <= TimeSpan.Zero) continue;
+
+                // 记录原始触发器状态，以便重新调度后恢复暂停状态
+                var originalState = await _scheduler.GetTriggerState(trigger.Key, ct);
+
+                // 已完成的触发器无需重新调度，跳过以避免意外多执行一次
+                if (originalState == Quartz.TriggerState.Complete) continue;
+
+                var startTime = CalculateStartTime(useBootTime, interval);
+
+                var remainingCount = CalculateRemainingCount(simpleTrigger.RepeatCount, simpleTrigger.TimesTriggered);
+
+                var newTrigger = TriggerBuilder.Create()
+                    .WithIdentity(trigger.Key)
+                    .WithSimpleSchedule(x => x
+                        .WithRepeatCount(remainingCount)
+                        .WithInterval(interval)
+                        .WithMisfireHandlingInstructionNextWithRemainingCount())
+                    .StartAt(startTime)
+                    .Build();
+
+                await _scheduler.RescheduleJob(trigger.Key, newTrigger, ct);
+
+                // RescheduleJob 会将触发器重置为 Normal 状态，
+                // 如果原来是暂停状态，需要重新暂停
+                if (originalState == Quartz.TriggerState.Paused)
+                {
+                    await _scheduler.PauseTrigger(trigger.Key, ct);
+                }
+
+                count++;
+                _logger.LogInformation(
+                    "重新调度 SimpleTrigger {TriggerKey}，UseBootTime={UseBootTime}，Interval={Interval}，StartTime={StartTime}",
+                    trigger.Key, useBootTime, interval, startTime);
+            }
+        }
+
+        _logger.LogInformation("应用启动时重新调度了 {Count} 个 SimpleTrigger", count);
     }
 
     private async Task<ScheduledTaskDetail?> GetTaskDetailAsync(JobKey jobKey, CancellationToken ct)
@@ -285,7 +379,7 @@ public class TaskSchedulerService : ITaskSchedulerService
         var triggerInfos = new List<TriggerInfo>();
 
         // 过滤掉 TriggerJob 产生的临时触发器，只保留任务本身的命名触发器
-        var expectedTriggerName = $"{jobKey.Name}_trigger";
+        var expectedTriggerName = GetTriggerName(jobKey.Name);
         foreach (var trigger in triggers)
         {
             if (trigger.Key.Name != expectedTriggerName)

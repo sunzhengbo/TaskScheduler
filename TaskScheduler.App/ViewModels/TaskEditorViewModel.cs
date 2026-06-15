@@ -321,7 +321,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                     {
                         await _taskService.UpdateSimpleTriggerAsync(
                             trigger.Name!, trigger.Group!,
-                            RepeatCount, TimeSpan.FromMinutes(RepeatIntervalMinutes), ct);
+                            RepeatCount, TimeSpan.FromMinutes(RepeatIntervalMinutes), ct, UseBootTime);
                     }
                 }
             }
@@ -337,7 +337,8 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                     TriggerType = SelectedTriggerType,
                     RepeatCount = RepeatCount,
                     RepeatInterval = TimeSpan.FromMinutes(RepeatIntervalMinutes),
-                    CronExpression = CronExpression
+                    CronExpression = CronExpression,
+                    UseBootTime = UseBootTime
                 };
                 await _taskService.CreateTaskAsync(request, ct);
             }

@@ -12,4 +12,5 @@ public class TaskCreateRequest
     public TimeSpan RepeatInterval { get; set; }
     public string CronExpression { get; set; } = string.Empty;
     public string TimeZoneId { get; set; } = "UTC";
+    public bool UseBootTime { get; set; }
 }

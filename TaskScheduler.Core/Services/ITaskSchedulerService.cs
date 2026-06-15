@@ -19,5 +19,11 @@ public interface ITaskSchedulerService
     Task ResumeTriggerAsync(string triggerName, string triggerGroup, CancellationToken ct = default);
     Task TriggerJobAsync(string jobName, string jobGroup, CancellationToken ct = default);
     Task UpdateCronTriggerAsync(string triggerName, string triggerGroup, string cronExpression, CancellationToken ct = default);
-    Task UpdateSimpleTriggerAsync(string triggerName, string triggerGroup, int repeatCount, TimeSpan interval, CancellationToken ct = default);
+    Task UpdateSimpleTriggerAsync(string triggerName, string triggerGroup, int repeatCount, TimeSpan interval, CancellationToken ct = default, bool useBootTime = false);
+
+    /// <summary>
+    /// 重新计算所有 SimpleTrigger 的起始时间并重新调度。
+    /// 开机模式：以当前系统开机时间为锚点 + 间隔；非开机模式：以当前应用启动时间为锚点 + 间隔。
+    /// </summary>
+    Task RescheduleAllSimpleTriggersAsync(CancellationToken ct = default);
 }

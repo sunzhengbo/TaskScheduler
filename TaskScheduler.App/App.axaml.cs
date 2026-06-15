@@ -60,6 +60,42 @@ public class App : Application
             {
                 await scheduler.Start();
                 schedulerLogger.LogInformation("Quartz Scheduler started");
+
+                // 启动后根据设置重新计算所有 SimpleTrigger 的起始时间
+                try
+                {
+                    var settingsService = serviceProvider.GetService<ISettingsService>();
+                    if (settingsService != null)
+                    {
+                        var engineJson = await settingsService.GetValueAsync("engine_settings");
+                        var engine = EngineSettings.FromJson(engineJson);
+                        if (engine.RescheduleOnStartup)
+                        {
+                            var taskService = serviceProvider.GetService<ITaskSchedulerService>();
+                            if (taskService != null)
+                            {
+                                await taskService.RescheduleAllSimpleTriggersAsync();
+                            }
+                            else
+                            {
+                                schedulerLogger.LogWarning("ITaskSchedulerService 未注册，跳过 SimpleTrigger 重调度");
+                            }
+                        }
+                        else
+                        {
+                            schedulerLogger.LogInformation("启动时重新调度已关闭，跳过 SimpleTrigger 重调度");
+                        }
+                    }
+                    else
+                    {
+                        schedulerLogger.LogWarning("ISettingsService 未注册，跳过 SimpleTrigger 重调度");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    schedulerLogger.LogWarning(ex, "启动时重新调度 SimpleTrigger 失败");
+                }
+
                 SchedulerReady.TrySetResult(true);
             }
             catch (Exception ex)

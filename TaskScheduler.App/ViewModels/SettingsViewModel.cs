@@ -38,6 +38,7 @@ public partial class SettingsViewModel : ViewModelBase
     // 引擎设置
     [ObservableProperty] private bool _startupEnabled;
     [ObservableProperty] private bool _startupMinimize;
+    [ObservableProperty] private bool _rescheduleOnStartup = true;
 
     partial void OnStartupEnabledChanged(bool value)
     {
@@ -102,6 +103,7 @@ public partial class SettingsViewModel : ViewModelBase
                     DatabaseType = engine.DatabaseType;
                     StartupEnabled = engine.StartupEnabled;
                     StartupMinimize = engine.StartupMinimize;
+                    RescheduleOnStartup = engine.RescheduleOnStartup;
                 }
                 catch (Exception ex) { _logger.LogWarning(ex, "反序列化引擎设置失败"); }
             }
@@ -202,7 +204,8 @@ public partial class SettingsViewModel : ViewModelBase
             MaxThreads = threads,
             DatabaseType = DatabaseType,
             StartupEnabled = StartupEnabled,
-            StartupMinimize = StartupMinimize
+            StartupMinimize = StartupMinimize,
+            RescheduleOnStartup = RescheduleOnStartup
         };
         await _settingsService.SetValueAsync("engine_settings", engine.ToJson());
         StartupHelper.SetStartupOnBoot(StartupEnabled, StartupMinimize);
@@ -250,6 +253,7 @@ public partial class SettingsViewModel : ViewModelBase
         CompactMode = false;
         StartupEnabled = false;
         StartupMinimize = false;
+        RescheduleOnStartup = true;
         ApplyTheme("System");
     }
 

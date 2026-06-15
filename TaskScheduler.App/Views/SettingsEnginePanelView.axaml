@@ -45,6 +45,18 @@
                               IsChecked="{Binding StartupMinimize}"
                               VerticalAlignment="Center" />
             </Grid>
+            <!-- 启动时重新调度 -->
+            <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="启动时重新调度" FontSize="13" FontWeight="Medium" />
+                    <TextBlock Text="应用启动时重新计算所有简单间隔任务的起始时间，开机模式对齐开机时间，非开机模式对齐应用启动时间"
+                               FontSize="12"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1"
+                              IsChecked="{Binding RescheduleOnStartup}"
+                              VerticalAlignment="Center" />
+            </Grid>
             <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                     BorderThickness="0,0,0,1" Margin="0,0,0,4" />
             <Grid ColumnDefinitions="*,*" ColumnSpacing="16" Margin="0,4">
