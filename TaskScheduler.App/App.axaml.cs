@@ -29,6 +29,15 @@ public class App : Application
     /// </summary>
     internal static TaskCompletionSource<bool> SchedulerReady { get; } = new();
 
+    /// <summary>
+    /// 检测当前进程是否为 Avalonia Designer HostApp（Rider 设计器预览）。
+    /// 设计器通过 dotnet.exe exec 加载 HostApp.dll 再反射加载本程序集，
+    /// Environment.ProcessPath 只是 dotnet.exe，需要检查完整命令行。
+    /// </summary>
+    internal static bool IsDesignMode { get; } =
+        Environment.CommandLine.Contains("Designer.HostApp", StringComparison.OrdinalIgnoreCase)
+        || AppDomain.CurrentDomain.FriendlyName.Contains("DesignHost", StringComparison.OrdinalIgnoreCase);
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -39,6 +48,14 @@ public class App : Application
 #if DEBUG
         this.AttachDeveloperTools();
 #endif
+
+        // Avalonia Designer 预览模式：仅加载 XAML，不初始化 Scheduler / 数据库 / 托盘等重量级服务
+        if (IsDesignMode)
+        {
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
         var services = new ServiceCollection();
         services.AddCommonServices();
         var serviceProvider = services.BuildServiceProvider();
