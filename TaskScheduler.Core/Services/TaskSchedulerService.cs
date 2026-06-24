@@ -240,12 +240,34 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
     public async Task PauseTaskAsync(string jobName, string jobGroup, CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        if (jobDetail == null) return;
+
+        // OnStartup 任务没有真实触发器，PauseJob 是空操作
+        // 改为在 JobDataMap 中标记暂停状态，供 GetTaskDetailAsync 和 TriggerAllStartupTasksAsync 读取
+        if (IsRunOnStartup(jobDetail))
+        {
+            jobDetail.JobDataMap["IsPaused"] = "true";
+            await scheduler.AddJob(jobDetail, replace: true, ct);
+            return;
+        }
+
         await scheduler.PauseJob(jobKey, ct);
     }
 
     public async Task ResumeTaskAsync(string jobName, string jobGroup, CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        if (jobDetail == null) return;
+
+        if (IsRunOnStartup(jobDetail))
+        {
+            jobDetail.JobDataMap.Remove("IsPaused");
+            await scheduler.AddJob(jobDetail, replace: true, ct);
+            return;
+        }
+
         await scheduler.ResumeJob(jobKey, ct);
     }
 
@@ -458,6 +480,14 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             if (!IsRunOnStartup(jobDetail))
                 continue;
 
+            // 跳过已暂停的开机启动任务
+            if (jobDetail.JobDataMap.TryGetValue("IsPaused", out var pausedVal)
+                && bool.TryParse(pausedVal?.ToString(), out var paused) && paused)
+            {
+                logger.LogInformation("跳过已暂停的开机启动任务 {JobKey}", jobKey);
+                continue;
+            }
+
             await scheduler.TriggerJob(jobKey, ct);
             count++;
             logger.LogInformation("触发开机启动任务 {JobKey}", jobKey);
@@ -494,15 +524,18 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
         }
 
         // OnStartup 任务可能没有触发器，或触发器状态为 Complete（已触发），
-        // 为 UI 展示创建一个 Normal 状态的合成 TriggerInfo，确保仪表盘正确统计
+        // 为 UI 展示创建一个合成 TriggerInfo，确保仪表盘正确统计
         if (runOnStartup && (triggerInfos.Count == 0 || triggerInfos.All(t => t.State != Models.TriggerState.Normal)))
         {
+            var isPaused = jobDetail.JobDataMap.TryGetValue("IsPaused", out var pausedVal)
+                           && bool.TryParse(pausedVal?.ToString(), out var paused) && paused;
+
             triggerInfos.Add(new TriggerInfo
             {
                 Name = expectedTriggerName,
                 Group = jobKey.Group,
                 Type = Models.TriggerType.OnStartup,
-                State = Models.TriggerState.Normal
+                State = isPaused ? Models.TriggerState.Paused : Models.TriggerState.Normal
             });
         }
 

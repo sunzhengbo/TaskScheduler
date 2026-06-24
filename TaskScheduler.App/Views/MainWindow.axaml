@@ -157,6 +157,16 @@
                                 Command="{Binding ActiveEditorViewModel.TestRunCommand}"
                                 IsEnabled="{Binding ActiveEditorViewModel.IsTesting, Converter={x:Static conv:BoolConverters.Not}}"
                                 Classes="Flat" />
+                        <Button Command="{Binding ActiveEditorViewModel.ImportFromClipboardCommand}"
+                                Classes="Flat" ToolTip.Tip="从剪贴板导入任务配置">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <avalonia:MaterialIcon Kind="ClipboardText" Width="16" Height="16" />
+                                <TextBlock Text="从剪贴板导入" />
+                            </StackPanel>
+                        </Button>
+                        <Button Content="导入任务"
+                                Command="{Binding ActiveEditorViewModel.ImportFromFileCommand}"
+                                Classes="Flat" />
                         <Button Content="保存任务"
                                 Command="{Binding ActiveEditorViewModel.SaveCommand}"
                                 IsEnabled="{Binding ActiveEditorViewModel.IsSaving, Converter={x:Static conv:BoolConverters.Not}}" />

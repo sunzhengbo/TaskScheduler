@@ -465,4 +465,94 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         _cts.Cancel();
         _navigation.GoBack();
     }
+
+    [RelayCommand]
+    private async Task ImportFromFileAsync()
+    {
+        try
+        {
+            var topLevel = GetTopLevel();
+            if (topLevel == null) return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+            {
+                Title = "导入任务",
+                AllowMultiple = false,
+                FileTypeFilter = new[] { new Avalonia.Platform.Storage.FilePickerFileType("JSON 文件") { Patterns = new[] { "*.json" } } }
+            });
+
+            if (files.Count > 0)
+            {
+                var json = await File.ReadAllTextAsync(files[0].Path.LocalPath);
+                ImportFromJson(json);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "从文件导入任务失败");
+            ShowToast("从文件导入任务失败", NotificationType.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportFromClipboardAsync()
+    {
+        try
+        {
+            var topLevel = GetTopLevel();
+            if (topLevel?.Clipboard == null) return;
+
+            var data = await topLevel.Clipboard.TryGetTextAsync();
+            if (!string.IsNullOrWhiteSpace(data))
+            {
+                ImportFromJson(data);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "从剪贴板导入任务失败");
+            ShowToast("从剪贴板导入任务失败", NotificationType.Error);
+        }
+    }
+
+    private void ImportFromJson(string json)
+    {
+        var model = TaskExportModel.FromJson(json);
+        if (model == null)
+        {
+            ShowToast("导入失败：无效的任务 JSON 格式", NotificationType.Error);
+            return;
+        }
+
+        TaskName = model.Name;
+        Group = model.Group;
+        Description = model.Description;
+        UseBootTime = model.UseBootTime;
+
+        SetTriggerTypeFlags(model.TriggerType);
+        CronExpression = model.CronExpression;
+        RepeatCount = model.RepeatCount;
+
+        if (TimeSpan.TryParse(model.RepeatInterval, out var interval))
+            RepeatIntervalMinutes = interval.TotalMinutes;
+
+        Command = new CommandModel
+        {
+            Name = model.Command.Name,
+            Type = model.Command.Type,
+            Content = model.Command.Content,
+            InterpreterVersion = model.Command.InterpreterVersion,
+            Description = model.Command.Description
+        };
+        SelectedCommandType = model.Command.Type;
+
+        ShowToast("任务配置已从 JSON 导入");
+    }
+
+    private static Avalonia.Controls.TopLevel? GetTopLevel()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            return desktop.MainWindow;
+        return null;
+    }
 }
