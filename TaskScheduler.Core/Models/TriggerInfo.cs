@@ -3,7 +3,8 @@ namespace TaskScheduler.Core.Models;
 public enum TriggerType
 {
     Simple,
-    Cron
+    Cron,
+    OnStartup
 }
 
 public enum TriggerState
@@ -37,6 +38,7 @@ public class TriggerInfo
             => RepeatCount == -1
                 ? $"每 {RepeatInterval.Value.TotalMinutes:0} 分钟"
                 : $"每 {RepeatInterval.Value.TotalMinutes:0} 分钟 x {RepeatCount}",
+        TriggerType.OnStartup => "应用启动时",
         _ => Type.ToString()
     };
 

@@ -77,9 +77,9 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="触发器类型" FontSize="13"
                                        />
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                                 <!-- Cron 表达式 -->
-                                <Border Grid.Column="0"
+                                <Border
                                         CornerRadius="8" Padding="12,10"
                                         Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
                                         BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
@@ -94,11 +94,12 @@
                                                        />
                                         </StackPanel>
                                         <TextBlock Text="灵活的时间表达式调度"
-                                                   FontSize="11" Margin="26,0,0,0" />
+                                                   FontSize="11" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Left" />
                                     </StackPanel>
                                 </Border>
                                 <!-- 简单间隔 -->
-                                <Border Grid.Column="1"
+                                <Border
                                         CornerRadius="8" Padding="12,10"
                                         Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
                                         BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
@@ -113,10 +114,31 @@
                                                        />
                                         </StackPanel>
                                         <TextBlock Text="固定时间间隔重复执行"
-                                                   FontSize="11" Margin="26,0,0,0" />
+                                                   FontSize="11" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Left" />
                                     </StackPanel>
                                 </Border>
-                            </Grid>
+                                <!-- 开机启动 -->
+                                <Border
+                                        CornerRadius="8" Padding="12,10"
+                                        Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                        BorderThickness="1"
+                                        Cursor="Hand">
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <RadioButton GroupName="TriggerType"
+                                                         IsChecked="{Binding IsOnStartupType}" />
+                                            <TextBlock Text="开机启动" FontSize="13" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       />
+                                        </StackPanel>
+                                        <TextBlock Text="应用启动时立即执行一次"
+                                                   FontSize="11" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
                         <!-- Cron 表达式（仅 Cron 类型时显示） -->
                         <StackPanel Spacing="4" IsVisible="{Binding IsCronType}">
@@ -151,6 +173,9 @@
                                 </StackPanel>
                             </ToolTip.Tip>
                         </CheckBox>
+                        <TextBlock Text="任务将在每次应用启动时立即执行一次。任务处于启用状态时才会触发。"
+                                   FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                   IsVisible="{Binding IsOnStartupType}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
             </Grid>

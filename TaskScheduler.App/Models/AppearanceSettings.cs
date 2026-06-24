@@ -14,9 +14,15 @@ public class AppearanceSettings
 
     public static AppearanceSettings FromJson(string? json)
     {
-        if (string.IsNullOrEmpty(json)) return new();
-        try { return JsonSerializer.Deserialize<AppearanceSettings>(json, JsonOptions) ?? new(); }
-        catch { return new(); }
+        if (string.IsNullOrEmpty(json)) return new AppearanceSettings();
+        try
+        {
+            return JsonSerializer.Deserialize<AppearanceSettings>(json, JsonOptions) ?? new AppearanceSettings();
+        }
+        catch
+        {
+            return new AppearanceSettings();
+        }
     }
 
     public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);

@@ -79,11 +79,22 @@ public partial class DashboardViewModel : ViewModelBase
         IsLoading = true;
         try
         {
+            // 等待调度器完全初始化（包括 StartAsync + TriggerAllStartupTasksAsync）后再加载数据
+            try
+            {
+                await App.SchedulerReady.Task;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "调度器未完全就绪，尝试加载已有数据");
+            }
+
             var tasks = await _taskService.GetAllTasksAsync();
 
             TotalCount = tasks.Count;
             var cronRunning = 0;
             var simpleRunning = 0;
+            var startupRunning = 0;
             RunningCount = 0;
             PausedCount = 0;
             FailedCount = 0;
@@ -102,6 +113,7 @@ public partial class DashboardViewModel : ViewModelBase
                     {
                         hasRunning = true;
                         if (trigger.Type == TriggerType.Cron) cronRunning++;
+                        else if (trigger.Type == TriggerType.OnStartup) startupRunning++;
                         else simpleRunning++;
                     }
                     else if (trigger.State == TriggerState.Paused)
@@ -127,6 +139,7 @@ public partial class DashboardViewModel : ViewModelBase
             var runningParts = new System.Collections.Generic.List<string>();
             if (cronRunning > 0) runningParts.Add($"Cron {cronRunning}");
             if (simpleRunning > 0) runningParts.Add($"简单 {simpleRunning}");
+            if (startupRunning > 0) runningParts.Add($"开机 {startupRunning}");
             RunningSub = runningParts.Count > 0 ? string.Join(" · ", runningParts) : "无";
 
             PausedSub = PausedCount > 0 ? $"共 {PausedCount} 个任务" : "无";

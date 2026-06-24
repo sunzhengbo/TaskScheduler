@@ -56,7 +56,7 @@ public partial class CreateTaskDialogViewModel(
     public AvaloniaList<string> AvailableGroups { get; } = new() { "DEFAULT", "SYSTEM", "USER", "DAEMON" };
 
     public AvaloniaList<TriggerType> AvailableTriggerTypes { get; } =
-        new() { TriggerType.Simple, TriggerType.Cron };
+        new() { TriggerType.Simple, TriggerType.Cron, TriggerType.OnStartup };
 
     public AvaloniaList<string> AvailableCommandTypes { get; } = BuildAvailableCommandTypes();
 

@@ -55,20 +55,43 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
     [ObservableProperty] private bool _isCronType = true;
     [ObservableProperty] private bool _isSimpleType;
+    [ObservableProperty] private bool _isOnStartupType;
 
     partial void OnIsCronTypeChanged(bool value)
     {
-        IsSimpleType = !value;
-        SelectedTriggerType = value ? TriggerType.Cron : TriggerType.Simple;
+        if (value)
+            SetTriggerTypeFlags(TriggerType.Cron);
+        else if (!IsSimpleType && !IsOnStartupType)
+            IsCronType = true;
+    }
+
+    partial void OnIsSimpleTypeChanged(bool value)
+    {
+        if (value)
+            SetTriggerTypeFlags(TriggerType.Simple);
+        else if (!IsCronType && !IsOnStartupType)
+            IsSimpleType = true;
+    }
+
+    partial void OnIsOnStartupTypeChanged(bool value)
+    {
+        if (value)
+            SetTriggerTypeFlags(TriggerType.OnStartup);
+        else if (!IsCronType && !IsSimpleType)
+            IsOnStartupType = true;
+    }
+
+    private void SetTriggerTypeFlags(TriggerType type)
+    {
+        IsCronType = type == TriggerType.Cron;
+        IsSimpleType = type == TriggerType.Simple;
+        IsOnStartupType = type == TriggerType.OnStartup;
+        SelectedTriggerType = type;
     }
 
     partial void OnSelectedTriggerTypeChanged(TriggerType value)
     {
-        var expected = value == TriggerType.Cron;
-        if (IsCronType != expected)
-            IsCronType = expected;
-        if (IsSimpleType != !expected)
-            IsSimpleType = !expected;
+        SetTriggerTypeFlags(value);
     }
 
     public string PageTitle => IsEditMode ? "编辑任务" : "新建任务";
@@ -88,7 +111,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
     public AvaloniaList<string> AvailableGroups { get; } = ["DEFAULT", "SYSTEM", "USER", "DAEMON"];
     public AvaloniaList<TaskPriority> AvailablePriorities { get; } = [TaskPriority.Low, TaskPriority.Normal, TaskPriority.High];
-    public AvaloniaList<TriggerType> AvailableTriggerTypes { get; } = [TriggerType.Simple, TriggerType.Cron];
+    public AvaloniaList<TriggerType> AvailableTriggerTypes { get; } = [TriggerType.Simple, TriggerType.Cron, TriggerType.OnStartup];
 
     public TaskEditorViewModel(
         ITaskSchedulerService taskService,
@@ -248,9 +271,11 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             if (task.Triggers is { Count: > 0 })
             {
                 var trigger = task.Triggers[0];
-                // 必须显式设置 IsCronType，因为 SelectedTriggerType 默认值可能与触发类型相同，
-                // 导致 [ObservableProperty] 不触发 OnSelectedTriggerTypeChanged
+                // 必须显式设置类型标志，因为 SelectedTriggerType 默认值可能与触发类型相同，
+                // 导致 [ObservableProperty] 不触发变更
                 IsCronType = trigger.Type == TriggerType.Cron;
+                IsSimpleType = trigger.Type == TriggerType.Simple;
+                IsOnStartupType = trigger.Type == TriggerType.OnStartup;
                 SelectedTriggerType = trigger.Type;
                 CronExpression = trigger.Type == TriggerType.Cron ? trigger.TriggerDisplay : string.Empty;
                 RepeatCount = trigger.RepeatCount;
@@ -352,6 +377,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 { "Command", commandJson },
                 { "Priority", Priority.ToString() },
                 { "UseBootTime", UseBootTime.ToString() },
+                { "RunOnStartup", (SelectedTriggerType == TriggerType.OnStartup).ToString() },
                 { "CreatedAt", createdAt },
                 { "UpdatedAt", now }
             };
@@ -373,6 +399,10 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                     {
                         if (!string.IsNullOrWhiteSpace(CronExpression))
                             await _taskService.UpdateCronTriggerAsync(trigger.Name!, trigger.Group!, CronExpression, ct);
+                    }
+                    else if (SelectedTriggerType == TriggerType.OnStartup)
+                    {
+                        await _taskService.UpdateOnStartupTriggerAsync(trigger.Name!, trigger.Group!, ct);
                     }
                     else
                     {
