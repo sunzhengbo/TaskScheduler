@@ -48,7 +48,18 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
         // 使用系统启动时间戳计算开机时间点
         var bootTime = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(Environment.TickCount64 / 1000.0);
-        return bootTime + interval;
+
+        // 对齐到开机时间网格：bootTime + N * interval（N ≥ 1），且严格 > now
+        var elapsed = DateTimeOffset.UtcNow - bootTime;
+        var intervalsNeeded = (long)Math.Ceiling(elapsed.TotalMilliseconds / interval.TotalMilliseconds);
+        if (intervalsNeeded < 1) intervalsNeeded = 1;
+
+        var result = bootTime + TimeSpan.FromTicks(interval.Ticks * intervalsNeeded);
+        // 边界保护：若恰好对齐网格点（result == now），推进到下一个网格点，避免 Quartz 误判为 misfire
+        if (result <= DateTimeOffset.UtcNow)
+            result += interval;
+
+        return result;
     }
 
     private static string GetTriggerName(string jobName) => $"{jobName}_trigger";
@@ -333,7 +344,16 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             .StartAt(startTime)
             .Build();
 
-        PreservePreviousFireTime(oldTrigger, newTrigger);
+        if (useBootTime)
+        {
+            // 开机时间模式：将 previousFireTime 对齐到开机时间网格（startTime - interval），
+            // 避免旧的非网格对齐值导致 Quartz 计算 nextFireTime 偏离网格
+            SetBootTimePreviousFireTime(newTrigger, startTime, interval);
+        }
+        else
+        {
+            PreservePreviousFireTime(oldTrigger, newTrigger);
+        }
 
         await scheduler.RescheduleJob(triggerKey, newTrigger, ct);
     }
@@ -411,18 +431,6 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
                 var startTime = CalculateStartTime(useBootTime, interval);
 
-                // 确保 startTime 在未来，避免 UseBootTime 模式下计算出过去时间
-                // 导致 Quartz 重调度后再次触发 misfire
-                var now = DateTimeOffset.UtcNow;
-                if (startTime <= now)
-                {
-                    var intervalsBehind =
-                        (long)Math.Ceiling((now - startTime).TotalMilliseconds / interval.TotalMilliseconds);
-                    startTime = startTime.AddTicks(interval.Ticks * intervalsBehind);
-                    if (startTime <= now)
-                        startTime = startTime.Add(interval);
-                }
-
                 var remainingCount = CalculateRemainingCount(simpleTrigger.RepeatCount, simpleTrigger.TimesTriggered);
 
                 var newTrigger = TriggerBuilder.Create()
@@ -434,7 +442,16 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                     .StartAt(startTime)
                     .Build();
 
-                PreservePreviousFireTime(trigger, newTrigger);
+                if (useBootTime)
+                {
+                    // 开机时间模式：将 previousFireTime 对齐到开机时间网格（startTime - interval），
+                    // 避免旧的非网格对齐值导致 Quartz 计算 nextFireTime 偏离网格
+                    SetBootTimePreviousFireTime(newTrigger, startTime, interval);
+                }
+                else
+                {
+                    PreservePreviousFireTime(trigger, newTrigger);
+                }
 
                 await scheduler.RescheduleJob(trigger.Key, newTrigger, ct);
 
@@ -451,13 +468,23 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
         logger.LogInformation("应用启动时重新调度了 {Count} 个 SimpleTrigger", count);
     }
 
+    private static void SetBootTimePreviousFireTime(ITrigger newTrigger, DateTimeOffset startTime, TimeSpan interval)
+    {
+        if (newTrigger is AbstractTrigger abstractTrigger)
+        {
+            abstractTrigger.SetPreviousFireTimeUtc(startTime - interval);
+        }
+    }
+
     private static void PreservePreviousFireTime(ITrigger oldTrigger, ITrigger newTrigger)
     {
         var prevFireTime = oldTrigger.GetPreviousFireTimeUtc();
         if (!prevFireTime.HasValue) return;
 
         if (newTrigger is AbstractTrigger abstractTrigger)
+        {
             abstractTrigger.SetPreviousFireTimeUtc(prevFireTime);
+        }
     }
 
     private static bool IsRunOnStartup(IJobDetail jobDetail)
