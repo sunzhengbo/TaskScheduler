@@ -170,6 +170,43 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task BrowseNewToolPathAsync()
+    {
+        try
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                || desktop.MainWindow is null)
+                return;
+
+            var files = await desktop.MainWindow.StorageProvider.OpenFilePickerAsync(
+                new Avalonia.Platform.Storage.FilePickerOpenOptions
+                {
+                    Title = "选择可执行文件",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new Avalonia.Platform.Storage.FilePickerFileType("可执行文件")
+                        {
+                            Patterns = new[] { "*.exe", "*.bat", "*.cmd", "*.sh", "*.py", "*.ps1" }
+                        },
+                        new Avalonia.Platform.Storage.FilePickerFileType("所有文件")
+                        {
+                            Patterns = new[] { "*" }
+                        }
+                    }
+                });
+
+            if (files.Count > 0)
+                NewToolPath = files[0].Path.LocalPath;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "选择可执行文件失败");
+            ShowToast("选择可执行文件失败", NotificationType.Error);
+        }
+    }
+
+    [RelayCommand]
     private async Task DeleteToolAsync(ToolConfig? tool)
     {
         if (tool == null) return;

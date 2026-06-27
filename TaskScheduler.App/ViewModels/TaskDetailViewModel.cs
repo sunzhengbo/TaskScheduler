@@ -264,7 +264,7 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "导出命令",
-            SuggestedFileName = $"{Command.Name}{ext}",
+            SuggestedFileName = $"{CurrentTask.Name}{ext}",
             DefaultExtension = ext.TrimStart('.'),
             FileTypeChoices = new[] { new FilePickerFileType("脚本文件") { Patterns = new[] { $"*{ext}" } } }
         });

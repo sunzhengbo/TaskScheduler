@@ -39,35 +39,60 @@
                         <Button Content="添加" Command="{Binding AddToolCommand}"
                                 Background="{DynamicResource SystemControlHighlightAccentBrush}"
                                 Foreground="White" Padding="12,6" CornerRadius="8"
-                                BorderThickness="0" Cursor="Hand" />
+                                BorderThickness="0" Cursor="Hand" MinWidth="72" />
                     </StackPanel>
                 </Border>
                 <ScrollViewer>
-                    <StackPanel Spacing="12" Margin="20,16">
-                        <StackPanel Spacing="4">
+                    <StackPanel Spacing="16" Margin="20,16">
+                        <StackPanel Spacing="6">
                             <TextBlock Text="工具类型" FontSize="13" FontWeight="Medium" />
                             <ComboBox ItemsSource="{Binding ToolTypes}" SelectedItem="{Binding NewToolType}"
-                                      Width="280" HorizontalAlignment="Left" />
-                            <TextBlock Text="选择解释器类型"
-                                       FontSize="12" />
+                                      HorizontalAlignment="Stretch" />
+                            <TextBlock Text="选择解释器类型（如 Python、PowerShell、Shell 等）"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
-                        <StackPanel Spacing="4">
+                        <StackPanel Spacing="6">
                             <TextBlock Text="版本名称" FontSize="13" FontWeight="Medium" />
-                             <TextBox Text="{Binding NewToolVersion}" PlaceholderText="如: python3.12"
+                            <TextBox Text="{Binding NewToolVersion}" PlaceholderText="如: python3.12"
                                      FontFamily="Consolas,Courier New,monospace" />
+                            <TextBlock Text="给这个版本起一个便于识别的名称，会在任务配置下拉列表中显示"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
-                        <StackPanel Spacing="4">
+                        <StackPanel Spacing="6">
                             <TextBlock Text="可执行文件路径" FontSize="13" FontWeight="Medium" />
-                             <TextBox Text="{Binding NewToolPath}" PlaceholderText="如: /usr/bin/python3.12"
-                                     FontFamily="Consolas,Courier New,monospace" />
+                            <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Stretch">
+                                <TextBox Grid.Column="0" Text="{Binding NewToolPath}"
+                                         PlaceholderText="如: /usr/bin/python3.12"
+                                         FontFamily="Consolas,Courier New,monospace" />
+                                <Button Grid.Column="1" Margin="6,0,0,0"
+                                        Classes="flatBtn" Padding="10,6" Cursor="Hand"
+                                        Command="{Binding BrowseNewToolPathCommand}"
+                                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                        BorderThickness="1">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="14" Height="14" />
+                                        <TextBlock Text="浏览" FontSize="12" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <TextBlock Text="支持绝对路径或 PATH 中的命令名"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
-                        <StackPanel Spacing="4">
+                        <StackPanel Spacing="6">
                             <TextBlock Text="环境变量（可选）" FontSize="13" FontWeight="Medium" />
                             <TextBox Text="{Binding NewToolEnvVariables}"
                                      PlaceholderText="如: PYTHONPATH=/opt/lib;PATH=/opt/bin"
                                      FontFamily="Consolas,Courier New,monospace" />
                             <TextBlock Text="用分号分隔多个环境变量，执行任务时会注入到进程中"
-                                       FontSize="12" />
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>

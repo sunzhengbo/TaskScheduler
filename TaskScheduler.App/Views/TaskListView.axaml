@@ -134,7 +134,7 @@
                     <DataGridTemplateColumn Header="触发器" Width="140">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ScheduledTaskDetail">
-                                <TextBlock Text="{Binding Triggers[0].TriggerDisplay}"
+                                <TextBlock Text="{Binding FirstTrigger.TriggerDisplay}"
                                            FontFamily="Consolas,Courier New,monospace"
                                            FontSize="12" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" Margin="4,0" />
@@ -147,8 +147,8 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ScheduledTaskDetail">
                                 <controls:StatusBadge
-                                    Text="{Binding Triggers[0].State, Converter={StaticResource TriggerStateToDisplay}}"
-                                    Status="{Binding Triggers[0].State, Converter={StaticResource TriggerStateToBadgeStatus}}"
+                                    Text="{Binding FirstTrigger.State, Converter={StaticResource TriggerStateToDisplay}}"
+                                    Status="{Binding FirstTrigger.State, Converter={StaticResource TriggerStateToBadgeStatus}}"
                                     VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -160,7 +160,7 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ScheduledTaskDetail">
                                 <TextBlock
-                                    Text="{Binding Triggers[0].NextFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                    Text="{Binding FirstTrigger.NextFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
                                     FontFamily="Consolas,Courier New,monospace"
                                     FontSize="12" VerticalAlignment="Center"
                                     Margin="4,0" />
@@ -173,7 +173,7 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ScheduledTaskDetail">
                                 <TextBlock
-                                    Text="{Binding Triggers[0].PreviousFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                    Text="{Binding FirstTrigger.PreviousFireTime, StringFormat='{}{0:MM-dd HH:mm}'}"
                                     FontFamily="Consolas,Courier New,monospace"
                                     FontSize="12" VerticalAlignment="Center"
                                     Margin="4,0" />

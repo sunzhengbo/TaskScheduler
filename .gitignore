@@ -8,3 +8,4 @@ Logs/
 .vs/
 appsettings.*.json
 /publish
+/.od-skills

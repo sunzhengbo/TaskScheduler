@@ -21,10 +21,9 @@ function Get-CommitHash {
 
 function Get-BuildVersion {
     $now = Get-Date
-    $datePart = $now.ToString("yyyyMMdd")
-    $timePart = $now.ToString("HHmm")
+    $date = $now.ToString("yyyy.MM.dd")
     $commit = Get-CommitHash
-    return "$datePart.$timePart.$commit"
+    return "$date.$commit"
 }
 
 function Update-AboutViewModel {

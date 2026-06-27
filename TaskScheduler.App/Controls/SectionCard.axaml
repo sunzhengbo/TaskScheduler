@@ -3,7 +3,7 @@
              xmlns:local="using:TaskScheduler.App.Controls"
              x:Class="TaskScheduler.App.Controls.SectionCard">
     <Border Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
-            CornerRadius="8" Padding="20" Margin="4">
+            CornerRadius="8" Padding="20">
         <StackPanel Spacing="12">
             <TextBlock x:Name="TitleBlock"
                        Text="{Binding Title, RelativeSource={RelativeSource AncestorType=local:SectionCard}}"

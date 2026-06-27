@@ -21,6 +21,9 @@ public class ScheduledTaskDetail : TaskInfo
 
     public List<TriggerInfo> Triggers { get; set; } = new();
 
+    /// <summary>第一个触发器（可能为 null）</summary>
+    public TriggerInfo? FirstTrigger => Triggers.Count > 0 ? Triggers[0] : null;
+
     /// <summary>任务优先级</summary>
     public TaskPriority Priority { get; set; } = TaskPriority.Normal;
 
@@ -47,5 +50,5 @@ public class ScheduledTaskDetail : TaskInfo
     public bool IsSelected { get; set; }
 
     /// <summary>任务是否启用（触发器状态为 Normal 即为启用）</summary>
-    public bool IsEnabled => Triggers.Count > 0 && Triggers[0].State == TriggerState.Normal;
+    public bool IsEnabled => FirstTrigger?.State == TriggerState.Normal;
 }

@@ -9,23 +9,53 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="TaskScheduler.App.Views.SettingsToolPanelView"
              x:DataType="vm:SettingsViewModel">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ToolCardBg" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ToolCardBorder" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="ToolCardHoverBg" Color="#F0F2F5" />
+                    <SolidColorBrush x:Key="ToolCardFg" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="ToolCardFgMedium" Color="#666666" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="ToolCardBg" Color="#2A2A2E" />
+                    <SolidColorBrush x:Key="ToolCardBorder" Color="#3F3F46" />
+                    <SolidColorBrush x:Key="ToolCardHoverBg" Color="#38383E" />
+                    <SolidColorBrush x:Key="ToolCardFg" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="ToolCardFgMedium" Color="#999999" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Border.toolCard:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ToolCardHoverBg}" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
     <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
             CornerRadius="12" Padding="20"
             BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
             BorderThickness="1">
         <StackPanel Spacing="16">
+            <!-- 顶部标题区 -->
             <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                     BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,4">
                 <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="解释器工具" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="解释器工具" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ToolCardFg}" />
                         <TextBlock Text="配置不同版本的解释器，任务可通过名称引用"
-                                   FontSize="12" />
+                                   FontSize="12"
+                                   Foreground="{DynamicResource ToolCardFgMedium}" />
                     </StackPanel>
                     <Button Grid.Column="1" Classes="flatBtn" Padding="10,6"
                             Command="{Binding OpenAddToolCommand}"
                             BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                            BorderThickness="1" FontSize="12">
+                            BorderThickness="1" FontSize="12" CornerRadius="6">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <avalonia:MaterialIcon Kind="Plus" Width="14" Height="14" />
                             <TextBlock Text="添加工具" FontSize="12" />
@@ -33,32 +63,37 @@
                     </Button>
                 </Grid>
             </Border>
+
+            <!-- 工具列表：单列垂直堆叠 -->
             <ItemsControl ItemsSource="{Binding ToolGroups}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <UniformGrid Columns="2" />
+                        <StackPanel Spacing="16" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ToolGroupItem">
-                        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                                BorderThickness="1" CornerRadius="8" Padding="16" Margin="4">
-                            <StackPanel Spacing="8">
+                        <Border Classes="toolCard"
+                                Background="{DynamicResource ToolCardBg}"
+                                BorderBrush="{DynamicResource ToolCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10" Padding="20">
+                            <StackPanel Spacing="14">
+                                <!-- 头部：图标 + 名称 + 编辑 -->
                                 <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                                        <Border CornerRadius="6" Width="28" Height="28"
-                                                Background="{Binding IconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, ConverterParameter=0.15, FallbackValue=#263776ab}">
-                                            <TextBlock Text="{Binding Icon}"
-                                                       FontFamily="Consolas,Courier New,monospace"
-                                                       FontSize="11" FontWeight="Bold"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{Binding IconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, FallbackValue=#3776ab}" />
-                                        </Border>
-                                        <TextBlock Text="{Binding ToolType}" FontWeight="SemiBold"
-                                                   FontSize="14" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                    <Button Grid.Column="2" Classes="flatBtn" Padding="8,2"
+                                    <Border Grid.Column="0" CornerRadius="6" Width="28" Height="28"
+                                            Background="{Binding IconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, ConverterParameter=0.15, FallbackValue=#263776ab}">
+                                        <TextBlock Text="{Binding Icon}"
+                                                   FontFamily="Consolas,Courier New,monospace"
+                                                   FontSize="11" FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{Binding IconColor, Converter={x:Static conv:ColorStringToBrushConverter.Instance}, FallbackValue=#3776ab}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="{Binding ToolType}" FontWeight="SemiBold"
+                                               FontSize="14" VerticalAlignment="Center" Margin="10,0,0,0"
+                                               Foreground="{DynamicResource ToolCardFg}" />
+                                    <Button Grid.Column="2" Classes="flatBtn" Padding="8,4"
                                             VerticalAlignment="Center"
                                             Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).EditToolCommand}"
                                             CommandParameter="{Binding ToolType}"
@@ -69,39 +104,63 @@
                                         </StackPanel>
                                     </Button>
                                 </Grid>
+
+                                <!-- 表头 -->
+                                <Grid ColumnDefinitions="180,*" Margin="0,2,0,0">
+                                    <TextBlock Grid.Column="0" Text="版本" FontSize="11"
+                                               Foreground="{DynamicResource ToolCardFgMedium}"
+                                               Margin="4,0,0,0" />
+                                    <TextBlock Grid.Column="1" Text="可执行文件路径" FontSize="11"
+                                               Foreground="{DynamicResource ToolCardFgMedium}"
+                                               Margin="12,0,0,0" />
+                                </Grid>
+
+                                <!-- 版本列表：对齐的行 -->
                                 <ItemsControl ItemsSource="{Binding Versions}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Spacing="0" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="models:ToolConfig">
-                                            <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                                                    CornerRadius="6" Padding="10,6" Margin="0,2">
-                                                    <Grid ColumnDefinitions="*,Auto">
-                                                        <StackPanel Grid.Column="0" Spacing="1">
-                                                          <TextBlock FontFamily="Consolas,Courier New,monospace"
-                                                                         FontSize="12" FontWeight="Medium">
-                                                                <TextBlock.Text>
-                                                                    <MultiBinding StringFormat="{}{0} | {1}">
-                                                                        <Binding Path="ToolType" />
-                                                                        <Binding Path="VersionName" />
-                                                                    </MultiBinding>
-                                                                </TextBlock.Text>
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding ExecutablePath}"
-                                                                        FontFamily="Consolas,Courier New,monospace"
-                                                                        FontSize="11"
-                                                                        TextTrimming="CharacterEllipsis"
-                                                                       MaxWidth="240"
-                                                                       HorizontalAlignment="Left" />
-                                                        </StackPanel>
-
-                                                    </Grid>
+                                            <Border Padding="4,6" Margin="0,1"
+                                                    CornerRadius="4">
+                                                <Border.Styles>
+                                                    <Style Selector="Border:pointerover">
+                                                        <Setter Property="Background"
+                                                                Value="{DynamicResource ToolCardHoverBg}" />
+                                                    </Style>
+                                                </Border.Styles>
+                                                <Grid ColumnDefinitions="180,*">
+                                                    <TextBlock Grid.Column="0" Text="{Binding VersionName}"
+                                                               FontFamily="Consolas,Courier New,monospace"
+                                                               FontSize="12" FontWeight="Medium"
+                                                               VerticalAlignment="Center"
+                                                               Margin="4,0,0,0"
+                                                               Foreground="{DynamicResource ToolCardFg}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding ExecutablePath}"
+                                                               FontFamily="Consolas,Courier New,monospace"
+                                                               FontSize="11"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center"
+                                                               Margin="12,0,0,0"
+                                                               Foreground="{DynamicResource ToolCardFgMedium}"
+                                                               ToolTip.Tip="{Binding ExecutablePath}" />
+                                                </Grid>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+
+                                <!-- 添加版本按钮 -->
                                 <Button Classes="dashedBtn" Margin="0,4,0,0"
                                         Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenAddToolForGroupCommand}"
                                         CommandParameter="{Binding ToolType}">
-                                    <TextBlock Text="+ 添加版本" FontSize="12" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <avalonia:MaterialIcon Kind="Plus" Width="12" Height="12" />
+                                        <TextBlock Text="添加版本" FontSize="12" />
+                                    </StackPanel>
                                 </Button>
                             </StackPanel>
                         </Border>
@@ -110,4 +169,5 @@
             </ItemsControl>
         </StackPanel>
     </Border>
+    </ScrollViewer>
 </UserControl>

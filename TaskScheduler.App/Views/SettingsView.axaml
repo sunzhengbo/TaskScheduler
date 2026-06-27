@@ -75,19 +75,17 @@
         </Border>
 
         <!-- 内容区 -->
-        <ScrollViewer Grid.Column="1" Padding="24">
-            <StackPanel Spacing="16">
+        <Grid Grid.Column="1" Margin="24">
 
-                <views:SettingsToolPanelView
-                    IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}" />
+            <views:SettingsToolPanelView
+                IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=0}" />
 
-                <views:SettingsEnginePanelView
-                    IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=1}" />
+            <views:SettingsEnginePanelView
+                IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=1}" />
 
-                <views:SettingsAppearancePanelView
-                    IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=2}" />
-            </StackPanel>
-        </ScrollViewer>
+            <views:SettingsAppearancePanelView
+                IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=2}" />
+        </Grid>
 
         <views:AddToolDialogView
             Grid.ColumnSpan="2" ZIndex="100" />
