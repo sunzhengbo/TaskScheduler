@@ -1,3 +1,6 @@
+using System.Diagnostics.Eventing.Reader;
+using System.Runtime.InteropServices;
+
 using Microsoft.Extensions.Logging;
 using Quartz;
 using Quartz.Impl.Matchers;
@@ -41,13 +44,62 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
         return cronExpression;
     }
 
+    [DllImport("kernel32.dll")]
+    private static extern bool QueryUnbiasedInterruptTime(out ulong unbiasedTime);
+
+    private static DateTimeOffset? GetWindowsBootTime()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return null;
+
+        try
+        {
+            // 通过查询系统日志 Microsoft-Windows-Kernel-Boot/Operational 里的最新事件时间来作为准确的开机/启动时间点
+            // 该日志包含了冷启动（Cold Boot）、快速启动（Fast Startup）和休眠唤醒等启动事件，且排除了普通的 S3 睡眠唤醒，非常契合“开机时间”的定义
+            var query = new EventLogQuery("Microsoft-Windows-Kernel-Boot/Operational", PathType.LogName)
+            {
+                ReverseDirection = true
+            };
+            using var reader = new EventLogReader(query);
+            using var record = reader.ReadEvent();
+            if (record?.TimeCreated != null)
+            {
+                return DateTime.SpecifyKind(record.TimeCreated.Value, DateTimeKind.Local).ToUniversalTime();
+            }
+        }
+        catch
+        {
+            // 忽略异常，降级回常规计算
+        }
+        return null;
+    }
+
     private static DateTimeOffset CalculateStartTime(bool useBootTime, TimeSpan interval)
     {
         if (!useBootTime)
             return DateTimeOffset.UtcNow.Add(interval);
 
-        // 使用系统启动时间戳计算开机时间点
-        var bootTime = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(Environment.TickCount64 / 1000.0);
+        DateTimeOffset bootTime;
+        var eventBootTime = GetWindowsBootTime();
+        if (eventBootTime.HasValue)
+        {
+            bootTime = eventBootTime.Value;
+        }
+        else
+        {
+            // 使用系统启动时间戳计算开机时间点（作为无日志访问权限或非Windows平台时的降级方案）
+            double uptimeSeconds;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && QueryUnbiasedInterruptTime(out ulong unbiasedTime))
+            {
+                uptimeSeconds = unbiasedTime / 10000000.0; // 100ns units to seconds
+            }
+            else
+            {
+                uptimeSeconds = Environment.TickCount64 / 1000.0;
+            }
+
+            bootTime = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(uptimeSeconds);
+        }
 
         // 对齐到开机时间网格：bootTime + N * interval（N ≥ 1），且严格 > now
         var elapsed = DateTimeOffset.UtcNow - bootTime;
