@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -53,7 +53,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private double _windowWidth = 1280;
 
     [ObservableProperty]
-    private bool _showCreateTaskButton;
+    private bool _showBackButton;
 
     [ObservableProperty]
     private bool _showEditorToolbar;
@@ -78,7 +78,6 @@ public partial class MainWindowViewModel : ViewModelBase
         NavItems =
         [
             new NavItem { Title = "仪表盘", Icon = "ViewDashboardOutline", TargetViewModelType = typeof(DashboardViewModel) },
-            new NavItem { Title = "新建任务", Icon = "Plus", TargetViewModelType = typeof(TaskEditorViewModel) },
             new NavItem { Title = "任务列表", Icon = "FormatListBulleted", TargetViewModelType = typeof(TaskListViewModel) },
             new NavItem { Title = "执行日志", Icon = "ConsoleLine", TargetViewModelType = typeof(ExecutionLogViewModel) },
             new NavItem { IsSeparator = true, SectionHeader = "系统" },
@@ -160,7 +159,26 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void CreateNewTask()
     {
-        NavigateToPage(typeof(TaskEditorViewModel));
+        if (_navigation.CurrentPage is TaskEditorViewModel editorVm)
+        {
+            editorVm.ResetToNew();
+            PageTitle = editorVm.PageTitle;
+        }
+        else
+        {
+            _navigation.NavigateTo<TaskEditorViewModel>();
+            if (_navigation.CurrentPage is TaskEditorViewModel newEditorVm)
+            {
+                newEditorVm.ResetToNew();
+                PageTitle = newEditorVm.PageTitle;
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void GoBack()
+    {
+        _navigation.GoBack();
     }
 
     [RelayCommand]
@@ -178,7 +196,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         _logger.LogDebug("OnCurrentPageChanged: {Type}", _navigation.CurrentPage?.GetType().Name ?? "null");
         CurrentPageViewModel = _navigation.CurrentPage;
-        ShowCreateTaskButton = _navigation.CurrentPage is TaskListViewModel;
+        ShowBackButton = _navigation.CurrentPage is TaskEditorViewModel or TaskDetailViewModel;
         ShowEditorToolbar = _navigation.CurrentPage is TaskEditorViewModel;
         ActiveEditorViewModel = _navigation.CurrentPage as TaskEditorViewModel;
         ShowSettingsToolbar = _navigation.CurrentPage is SettingsViewModel;
@@ -190,7 +208,15 @@ public partial class MainWindowViewModel : ViewModelBase
         // 根据页面类型设置标题
         if (_navigation.CurrentPage is TaskEditorViewModel editorVm)
         {
-            PageTitle = editorVm.PageTitle;
+            PageTitle = editorVm.IsEditMode
+                ? (string.IsNullOrWhiteSpace(editorVm.TaskName) ? "编辑任务" : $"编辑任务 · {editorVm.TaskName}")
+                : "新建任务";
+        }
+        else if (_navigation.CurrentPage is TaskDetailViewModel detailVm)
+        {
+            PageTitle = detailVm.CurrentTask != null
+                ? $"任务详情 · {detailVm.CurrentTask.Name}"
+                : "任务详情";
         }
         else
         {
@@ -203,6 +229,12 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var currentPageType = _navigation.CurrentPage?.GetType();
         if (currentPageType == null) return;
+
+        // 如果是任务编辑或任务详情页面，在侧边栏高亮“任务列表”
+        if (currentPageType == typeof(TaskEditorViewModel) || currentPageType == typeof(TaskDetailViewModel))
+        {
+            currentPageType = typeof(TaskListViewModel);
+        }
 
         if (_viewModelTypeToIndex.TryGetValue(currentPageType, out var index))
         {

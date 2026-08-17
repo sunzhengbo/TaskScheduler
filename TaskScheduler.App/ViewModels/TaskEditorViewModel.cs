@@ -98,6 +98,29 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
     partial void OnIsEditModeChanged(bool value) => OnPropertyChanged(nameof(PageTitle));
 
+    /// <summary>
+    /// 重置为新建任务的空白状态。
+    /// </summary>
+    public void ResetToNew()
+    {
+        _editingTask = null;
+        IsEditMode = false;
+        TaskName = string.Empty;
+        Group = "DEFAULT";
+        Description = null;
+        Priority = TaskPriority.Normal;
+        UseBootTime = false;
+        CronExpression = string.Empty;
+        RepeatCount = -1;
+        RepeatIntervalMinutes = 30;
+        SetTriggerTypeFlags(TriggerType.Cron);
+        TestOutput = string.Empty;
+        ValidationMessage = null;
+        Command = new CommandModel { Name = "命令1", Type = CommandTypes.PowerShell };
+        SelectedCommandType = CommandTypes.PowerShell;
+        UpdateInterpreterVersions();
+    }
+
     partial void OnSelectedCommandTypeChanged(string value)
     {
         Command.Type = value;

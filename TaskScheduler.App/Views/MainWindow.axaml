@@ -39,6 +39,22 @@
                     </StackPanel>
                 </Border>
 
+                <!-- 新建任务主操作按钮 -->
+                <Border DockPanel.Dock="Top" Margin="8,0,8,12">
+                    <Button Command="{Binding CreateNewTaskCommand}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            Height="38"
+                            CornerRadius="8"
+                            ToolTip.Tip="新建任务">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <avalonia:MaterialIcon Kind="Plus" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Text="新建任务" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"
+                                       IsVisible="{Binding !IsSidebarCollapsed}" />
+                        </StackPanel>
+                    </Button>
+                </Border>
+
                 <!-- 折叠按钮 -->
                 <Button DockPanel.Dock="Bottom"
                         Height="40" Margin="8,0,8,8"
@@ -92,12 +108,20 @@
                     BorderThickness="0,0,0,1"
                     Padding="20,0">
                 <Grid ColumnDefinitions="*,Auto">
-                    <!-- 标题（非设置页面） -->
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding PageTitle}"
-                               FontSize="20" FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               IsVisible="{Binding !ShowSettingsToolbar}" />
+                    <!-- 标题（非设置页面，支持返回按钮） -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                IsVisible="{Binding !ShowSettingsToolbar}">
+                        <Button Command="{Binding GoBackCommand}"
+                                Classes="Flat" Padding="6"
+                                IsVisible="{Binding ShowBackButton}"
+                                ToolTip.Tip="返回上一页"
+                                VerticalAlignment="Center">
+                            <avalonia:MaterialIcon Kind="ArrowLeft" Width="20" Height="20" />
+                        </Button>
+                        <TextBlock Text="{Binding PageTitle}"
+                                   FontSize="20" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
 
                     <!-- 设置页面标题（左侧） -->
                     <TextBlock Grid.Column="0"
@@ -127,20 +151,6 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
-                    </StackPanel>
-
-                    <!-- 操作按钮（非编辑器页面） -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
-                                IsVisible="{Binding !ShowEditorToolbar}"
-                                VerticalAlignment="Center">
-                        <Button Command="{Binding CreateNewTaskCommand}"
-                                IsVisible="{Binding ShowCreateTaskButton}"
-                                HorizontalAlignment="Right">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <avalonia:MaterialIcon Kind="Plus" Width="16" Height="16" />
-                                <TextBlock Text="新建任务" />
-                            </StackPanel>
-                        </Button>
                     </StackPanel>
 
                     <!-- 编辑器操作按钮 -->
