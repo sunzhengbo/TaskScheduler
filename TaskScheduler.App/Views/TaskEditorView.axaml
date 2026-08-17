@@ -10,19 +10,13 @@
              x:DataType="vm:TaskEditorViewModel">
 
     <Grid RowDefinitions="Auto,Auto,*,*">
-        <!-- Region 1: Validation banner + Header -->
-        <Border Grid.Row="0" Padding="24,12"
-                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                BorderThickness="0,0,0,1">
-            <StackPanel Spacing="8">
-                <Border Background="#33FF6B6B" CornerRadius="8" Padding="12,10"
-                        IsVisible="{Binding ValidationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                    <TextBlock Text="{Binding ValidationMessage}"
-                               FontSize="13" Foreground="#FF6B6B"
-                               TextWrapping="Wrap" />
-                </Border>
-                <TextBlock Text="编辑任务" FontSize="18" FontWeight="SemiBold" />
-            </StackPanel>
+        <!-- Region 1: Validation banner -->
+        <Border Grid.Row="0" Margin="24,12,24,0"
+                Background="#33FF6B6B" CornerRadius="8" Padding="12,10"
+                IsVisible="{Binding ValidationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding ValidationMessage}"
+                       FontSize="13" Foreground="#FF6B6B"
+                       TextWrapping="Wrap" />
         </Border>
 
         <!-- Region 2: Basic Info + Triggers -->
