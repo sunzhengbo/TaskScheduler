@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            ext: zip
+          - rid: win-arm64
+            os: windows-latest
+            ext: zip
+          - rid: linux-x64
+            os: ubuntu-latest
+            ext: tar.gz
+          - rid: linux-arm64
+            os: ubuntu-latest
+            ext: tar.gz
+          - rid: osx-x64
+            os: macos-latest
+            ext: tar.gz
+          - rid: osx-arm64
+            os: macos-latest
+            ext: tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set version info
+        shell: pwsh
+        run: |
+          $date = (Get-Date).ToString("yyyy.MM.dd")
+          $commit = (git rev-parse --short HEAD).Trim()
+          $version = "{0}.{1}" -f $date, $commit
+          $releaseTime = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+          $artifactName = "TaskScheduler_${{ matrix.rid }}_{0}.${{ matrix.ext }}" -f $version
+          
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_TIME=$releaseTime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ARTIFACT_NAME=$artifactName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Update AboutViewModel
+        shell: pwsh
+        run: |
+          $viewModelPath = "TaskScheduler.App/ViewModels/AboutViewModel.cs"
+          if (Test-Path $viewModelPath) {
+              $lines = Get-Content -Path $viewModelPath
+              for ($i = 0; $i -lt $lines.Count; $i++) {
+                  $line = $lines[$i]
+                  if ($line -match '_version = "') {
+                      $lines[$i] = $line -replace '_version = "[^"]*"', "_version = `"$env:VERSION`""
+                  }
+                  if ($line -match '_releaseTime = "') {
+                      $lines[$i] = $line -replace '_releaseTime = "[^"]*"', "_releaseTime = `"$env:RELEASE_TIME`""
+                  }
+              }
+              $lines | Set-Content -Path $viewModelPath
+          }
+
+      - name: Publish application
+        shell: pwsh
+        run: |
+          dotnet publish TaskScheduler.App/TaskScheduler.App.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            --self-contained `
+            -p:PublishSingleFile=true `
+            -p:Version=1.0.0 `
+            -p:InformationalVersion=$env:VERSION `
+            -p:AssemblyVersion=1.0.0 `
+            -p:FileVersion=1.0.0 `
+            -o "publish/${{ matrix.rid }}"
+
+      - name: Clean up unnecessary files
+        shell: pwsh
+        run: |
+          $outputDir = "publish/${{ matrix.rid }}"
+          $cleanupTargets = @("*.pdb", "appsettings.*.json", "Resources")
+          foreach ($pattern in $cleanupTargets) {
+              $items = Get-ChildItem -Path $outputDir -Filter $pattern -Recurse -ErrorAction SilentlyContinue
+              foreach ($item in $items) {
+                  Remove-Item -Path $item.FullName -Recurse -Force
+              }
+          }
+
+      - name: Archive asset (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "publish/${{ matrix.rid }}/*" -DestinationPath "$env:ARTIFACT_NAME" -Force
+
+      - name: Archive asset (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          tar -czf "$ARTIFACT_NAME" -C "publish/${{ matrix.rid }}" .
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', env.VERSION) }}
+          name: TaskScheduler v${{ env.VERSION }}
+          files: ${{ env.ARTIFACT_NAME }}
