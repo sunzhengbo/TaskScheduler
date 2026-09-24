@@ -167,16 +167,42 @@
                                 Command="{Binding ActiveEditorViewModel.TestRunCommand}"
                                 IsEnabled="{Binding ActiveEditorViewModel.IsTesting, Converter={x:Static conv:BoolConverters.Not}}"
                                 Classes="Flat" />
+                        <!-- 新建模式：导入操作 -->
                         <Button Command="{Binding ActiveEditorViewModel.ImportFromClipboardCommand}"
-                                Classes="Flat" ToolTip.Tip="从剪贴板导入任务配置">
+                                Classes="Flat" ToolTip.Tip="从剪贴板导入任务配置"
+                                IsVisible="{Binding ActiveEditorViewModel.IsEditMode, Converter={x:Static conv:BoolConverters.Not}}">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <avalonia:MaterialIcon Kind="ClipboardText" Width="16" Height="16" />
                                 <TextBlock Text="从剪贴板导入" />
                             </StackPanel>
                         </Button>
-                        <Button Content="导入任务"
-                                Command="{Binding ActiveEditorViewModel.ImportFromFileCommand}"
-                                Classes="Flat" />
+                        <Button Command="{Binding ActiveEditorViewModel.ImportFromFileCommand}"
+                                Classes="Flat" ToolTip.Tip="从 JSON 文件导入任务"
+                                IsVisible="{Binding ActiveEditorViewModel.IsEditMode, Converter={x:Static conv:BoolConverters.Not}}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <avalonia:MaterialIcon Kind="Import" Width="16" Height="16" />
+                                <TextBlock Text="导入任务" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- 编辑模式：导出操作 -->
+                        <Button Command="{Binding ActiveEditorViewModel.ExportToClipboardCommand}"
+                                Classes="Flat" ToolTip.Tip="复制任务配置到剪贴板"
+                                IsVisible="{Binding ActiveEditorViewModel.IsEditMode}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <avalonia:MaterialIcon Kind="ContentCopy" Width="16" Height="16" />
+                                <TextBlock Text="复制配置" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ActiveEditorViewModel.ExportToFileCommand}"
+                                Classes="Flat" ToolTip.Tip="导出任务为 JSON 文件"
+                                IsVisible="{Binding ActiveEditorViewModel.IsEditMode}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <avalonia:MaterialIcon Kind="Export" Width="16" Height="16" />
+                                <TextBlock Text="导出任务" />
+                            </StackPanel>
+                        </Button>
+
                         <Button Content="保存任务"
                                 Command="{Binding ActiveEditorViewModel.SaveCommand}"
                                 IsEnabled="{Binding ActiveEditorViewModel.IsSaving, Converter={x:Static conv:BoolConverters.Not}}" />

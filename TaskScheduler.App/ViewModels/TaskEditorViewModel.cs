@@ -2,20 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Notifications;
 using Avalonia.Input.Platform;
+using Avalonia.Platform.Storage;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using Microsoft.Extensions.Logging;
-
-using Avalonia.Controls.Notifications;
 
 using TaskScheduler.App.Jobs;
 using TaskScheduler.App.Models;
@@ -570,6 +571,92 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         SelectedCommandType = model.Command.Type;
 
         ShowToast("任务配置已从 JSON 导入");
+    }
+
+    /// <summary>
+    /// 导出当前任务配置为 JSON 文件。
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportToFileAsync()
+    {
+        try
+        {
+            var topLevel = GetTopLevel();
+            if (topLevel == null) return;
+
+            var cleanName = string.Join("_", (TaskName ?? string.Empty).Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim();
+            var suggestedName = !string.IsNullOrWhiteSpace(cleanName) ? cleanName : "task";
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "导出任务",
+                SuggestedFileName = $"{suggestedName}.json",
+                DefaultExtension = "json",
+                FileTypeChoices = new[] { new FilePickerFileType("JSON 文件") { Patterns = new[] { "*.json" } } }
+            });
+
+            if (file != null)
+            {
+                var exportModel = BuildExportModel();
+                var json = exportModel.ToJson();
+                await File.WriteAllTextAsync(file.Path.LocalPath, json, Encoding.UTF8);
+                ShowToast("任务配置已导出");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "导出任务失败");
+            ShowToast("导出任务失败", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// 复制当前任务配置 JSON 到剪贴板。
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportToClipboardAsync()
+    {
+        try
+        {
+            var topLevel = GetTopLevel();
+            if (topLevel?.Clipboard == null) return;
+
+            var exportModel = BuildExportModel();
+            var json = exportModel.ToJson();
+
+            await topLevel.Clipboard.SetTextAsync(json);
+            ShowToast("任务配置已复制到剪贴板");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "复制任务配置到剪贴板失败");
+            ShowToast("复制任务配置到剪贴板失败", NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// 从当前编辑器的字段构建任务导出模型。
+    /// </summary>
+    private TaskExportModel BuildExportModel()
+    {
+        return new TaskExportModel
+        {
+            Name = TaskName,
+            Group = Group,
+            Description = Description,
+            TriggerType = SelectedTriggerType,
+            RepeatCount = RepeatCount,
+            RepeatInterval = TimeSpan.FromMinutes(RepeatIntervalMinutes).ToString(),
+            CronExpression = CronExpression,
+            UseBootTime = UseBootTime,
+            Command = new CommandExportModel
+            {
+                Name = Command.Name,
+                Type = Command.Type,
+                Content = Command.Content,
+                InterpreterVersion = Command.InterpreterVersion,
+                Description = Command.Description
+            }
+        };
     }
 
     private static Avalonia.Controls.TopLevel? GetTopLevel()
