@@ -9,3 +9,4 @@ Logs/
 appsettings.*.json
 /publish
 /.od-skills
+nuget.config

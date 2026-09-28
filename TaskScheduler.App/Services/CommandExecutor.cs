@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -43,11 +44,17 @@ public class CommandExecutor : ICommandExecutor
         {
             case CommandTypes.PowerShell:
                 processStartInfo.FileName = "pwsh.exe";
+                processStartInfo.StandardOutputEncoding = Encoding.UTF8;
+                processStartInfo.StandardErrorEncoding = Encoding.UTF8;
+                processStartInfo.Environment["NO_COLOR"] = "1";
                 processStartInfo.ArgumentList.Add("-NoProfile");
                 processStartInfo.ArgumentList.Add("-ExecutionPolicy");
                 processStartInfo.ArgumentList.Add("Bypass");
                 processStartInfo.ArgumentList.Add("-Command");
-                processStartInfo.ArgumentList.Add(command);
+                processStartInfo.ArgumentList.Add(
+                    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); " +
+                    "if ($PSStyle) { $PSStyle.OutputRendering = 'PlainText' }; " +
+                    command);
                 break;
 
             case CommandTypes.Python:
