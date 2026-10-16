@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Collections;
+using Avalonia.Layout;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,22 @@ public partial class NavItem : ObservableObject
     public bool IsSeparator { get; init; }
     public string? SectionHeader { get; init; }
     public bool IsSection => !string.IsNullOrEmpty(SectionHeader);
+
+    [ObservableProperty]
+    private bool _isSidebarCollapsed;
+
+    public bool IsTitleVisible => !IsSidebarCollapsed;
+    public bool IsSectionVisible => IsSection && !IsSidebarCollapsed;
+    public HorizontalAlignment ItemHorizontalAlignment => IsSidebarCollapsed
+        ? HorizontalAlignment.Center
+        : HorizontalAlignment.Stretch;
+
+    partial void OnIsSidebarCollapsedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsTitleVisible));
+        OnPropertyChanged(nameof(IsSectionVisible));
+        OnPropertyChanged(nameof(ItemHorizontalAlignment));
+    }
 }
 
 /// <summary>
@@ -29,9 +46,9 @@ public partial class NavItem : ObservableObject
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
-    internal const double SidebarCollapseThreshold = 900;
+    internal const double SidebarCollapseThreshold = 1100;
     internal const double SidebarExpandedWidth = 260;
-    internal const double SidebarCollapsedWidth = 48;
+    internal const double SidebarCollapsedWidth = 64;
 
     private readonly INavigationService _navigation;
     private readonly ILogger<MainWindowViewModel> _logger;
@@ -87,6 +104,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
         BuildViewModelTypeIndex();
         _navigation.NavigateTo<DashboardViewModel>();
+    }
+
+    partial void OnIsSidebarCollapsedChanged(bool value)
+    {
+        foreach (var item in NavItems)
+        {
+            item.IsSidebarCollapsed = value;
+        }
     }
 
 

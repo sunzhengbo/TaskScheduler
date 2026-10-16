@@ -11,7 +11,7 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/logo.ico"
         Title="TaskScheduler"
-        MinWidth="1024" MinHeight="680"
+        MinWidth="760" MinHeight="480"
         Width="1280" Height="800"
         WindowStartupLocation="CenterScreen"
         SizeChanged="Window_OnSizeChanged">
@@ -29,7 +29,7 @@
                 BorderThickness="0,0,1,0">
             <DockPanel>
                 <!-- Brand 区域 -->
-                <Border DockPanel.Dock="Top" Height="60" Padding="16,0">
+                <Border DockPanel.Dock="Top" Height="60" Padding="8,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
                         <avalonia:MaterialIcon Kind="TimerCogOutline" Width="28" Height="28"
                                                Foreground="{DynamicResource SystemAccentColor}" />
@@ -75,6 +75,7 @@
                             <Panel>
                                 <!-- 普通导航项 -->
                                 <Grid ColumnDefinitions="Auto,*" Margin="4,6"
+                                      HorizontalAlignment="{Binding ItemHorizontalAlignment}"
                                       IsVisible="{Binding !IsSeparator}">
                                     <avalonia:MaterialIcon Grid.Column="0"
                                                            Kind="{Binding Icon}"
@@ -82,13 +83,14 @@
                                                            VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding Title}"
+                                               IsVisible="{Binding IsTitleVisible}"
                                                VerticalAlignment="Center"
                                                FontSize="14"
                                                Margin="12,0,0,0" />
                                 </Grid>
                                 <!-- 分区标题 -->
                                 <TextBlock Text="{Binding SectionHeader}"
-                                           IsVisible="{Binding IsSection}"
+                                           IsVisible="{Binding IsSectionVisible}"
                                            FontSize="12"
                                            Margin="4,12,0,4" />
                             </Panel>

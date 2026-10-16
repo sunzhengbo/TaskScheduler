@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -13,10 +14,17 @@ public partial class MainWindow : Window
 {
     private MainWindowViewModel? _viewModel;
     private bool _isShuttingDown;
+    private bool _isAdjustingForScreen;
+    private double _defaultMinWidth;
+    private double _defaultMinHeight;
+    private PixelRect? _lastWorkingArea;
+    private double? _lastScreenScaling;
 
     public MainWindow()
     {
         InitializeComponent();
+        _defaultMinWidth = MinWidth;
+        _defaultMinHeight = MinHeight;
 
         WeakReferenceMessenger.Default.Register<TokenMessages.ShowWindowMessage>(this,
             (_, _) => { ShowWindowFromTray(); });
@@ -49,10 +57,19 @@ public partial class MainWindow : Window
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             UpdateSidebarVisualState(_viewModel.IsSidebarCollapsed);
         }
+
+        PositionChanged += OnPositionChanged;
+        ScalingChanged += OnScalingChanged;
+        Screens.Changed += OnScreensChanged;
+        FitToScreen(center: true);
     }
 
     protected override void OnUnloaded(RoutedEventArgs e)
     {
+        PositionChanged -= OnPositionChanged;
+        ScalingChanged -= OnScalingChanged;
+        Screens.Changed -= OnScreensChanged;
+
         if (_viewModel != null)
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
@@ -76,6 +93,76 @@ public partial class MainWindow : Window
                 ? MainWindowViewModel.SidebarCollapsedWidth
                 : MainWindowViewModel.SidebarExpandedWidth;
             BrandText.IsVisible = !isCollapsed;
+        }
+    }
+
+    private void OnPositionChanged(object? sender, PixelPointEventArgs e)
+    {
+        FitToScreen(position: e.Point);
+    }
+
+    private void OnScalingChanged(object? sender, EventArgs e)
+    {
+        FitToScreen();
+    }
+
+    private void OnScreensChanged(object? sender, EventArgs e)
+    {
+        FitToScreen();
+    }
+
+    private void FitToScreen(bool center = false, PixelPoint? position = null)
+    {
+        if (_isAdjustingForScreen)
+        {
+            return;
+        }
+
+        var screen = position is { } point
+            ? Screens.ScreenFromPoint(point)
+            : Screens.ScreenFromWindow(this);
+        screen ??= Screens.Primary;
+        if (screen is null)
+        {
+            return;
+        }
+
+        var workArea = screen.WorkingArea;
+        var scaling = screen.Scaling;
+        if (!center && _lastWorkingArea == workArea && _lastScreenScaling == scaling)
+        {
+            return;
+        }
+
+        _lastWorkingArea = workArea;
+        _lastScreenScaling = scaling;
+        var maxWidth = workArea.Width / scaling * 0.96;
+        var maxHeight = workArea.Height / scaling * 0.96;
+
+        _isAdjustingForScreen = true;
+        try
+        {
+            MinWidth = Math.Min(_defaultMinWidth, maxWidth);
+            MinHeight = Math.Min(_defaultMinHeight, maxHeight);
+            Width = Math.Min(Width, maxWidth);
+            Height = Math.Min(Height, maxHeight);
+
+            var widthInPixels = (int)Math.Ceiling(Width * scaling);
+            var heightInPixels = (int)Math.Ceiling(Height * scaling);
+            var maxX = workArea.X + workArea.Width - widthInPixels;
+            var maxY = workArea.Y + workArea.Height - heightInPixels;
+            var currentPosition = position ?? Position;
+            Position = center
+                ? new PixelPoint(
+                    workArea.X + (workArea.Width - widthInPixels) / 2,
+                    workArea.Y + (workArea.Height - heightInPixels) / 2)
+                : new PixelPoint(
+                    Math.Clamp(currentPosition.X, workArea.X, maxX),
+                    Math.Clamp(currentPosition.Y, workArea.Y, maxY));
+        }
+        finally
+        {
+            _isAdjustingForScreen = false;
         }
     }
 
