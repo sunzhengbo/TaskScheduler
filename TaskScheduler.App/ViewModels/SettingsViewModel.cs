@@ -55,10 +55,57 @@ public partial class SettingsViewModel : ViewModelBase
 
     // 添加工具对话框
     [ObservableProperty] private bool _isAddToolDialogOpen;
-    [ObservableProperty] private string _newToolType = "Python";
-    [ObservableProperty] private string _newToolVersion = string.Empty;
-    [ObservableProperty] private string _newToolPath = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddToolCommand))]
+    [NotifyPropertyChangedFor(nameof(IsToolNameDuplicate))]
+    [NotifyPropertyChangedFor(nameof(ToolNameErrorText))]
+    [NotifyPropertyChangedFor(nameof(HasToolNameError))]
+    private string _newToolType = "Python";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddToolCommand))]
+    [NotifyPropertyChangedFor(nameof(IsToolNameDuplicate))]
+    [NotifyPropertyChangedFor(nameof(ToolNameErrorText))]
+    [NotifyPropertyChangedFor(nameof(HasToolNameError))]
+    private string _newToolVersion = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddToolCommand))]
+    private string _newToolPath = string.Empty;
+
     [ObservableProperty] private string _newToolEnvVariables = string.Empty;
+
+    public bool IsToolNameDuplicate => !string.IsNullOrEmpty(ToolNameErrorText);
+
+    public string? ToolNameErrorText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(NewToolVersion)) return null;
+            var trimmed = NewToolVersion.Trim();
+
+            var sameType = Tools.FirstOrDefault(t =>
+                t.ToolType.Equals(NewToolType, StringComparison.OrdinalIgnoreCase) &&
+                t.VersionName?.Trim().Equals(trimmed, StringComparison.OrdinalIgnoreCase) == true);
+            if (sameType != null)
+                return $"【{NewToolType}】下已存在同名版本 '{trimmed}'";
+
+            var anyType = Tools.FirstOrDefault(t =>
+                t.VersionName?.Trim().Equals(trimmed, StringComparison.OrdinalIgnoreCase) == true);
+            if (anyType != null)
+                return $"已存在同名工具版本 '{trimmed}'（所属类型: {anyType.ToolType}）";
+
+            return null;
+        }
+    }
+
+    public bool HasToolNameError => !string.IsNullOrEmpty(ToolNameErrorText);
+
+    public bool CanAddTool =>
+        !string.IsNullOrWhiteSpace(NewToolVersion) &&
+        !string.IsNullOrWhiteSpace(NewToolPath) &&
+        !IsToolNameDuplicate;
 
     // 编辑工具对话框
     [ObservableProperty] private bool _isEditToolDialogOpen;
@@ -141,32 +188,37 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void OpenAddTool()
     {
+        NewToolVersion = string.Empty;
+        NewToolPath = string.Empty;
         NewToolEnvVariables = string.Empty;
         IsAddToolDialogOpen = true;
     }
 
     [RelayCommand]
-    private void CloseAddTool() => IsAddToolDialogOpen = false;
-
-    [RelayCommand]
-    private async Task AddToolAsync()
+    private void CloseAddTool()
     {
-        if (string.IsNullOrWhiteSpace(NewToolVersion) || string.IsNullOrWhiteSpace(NewToolPath)) return;
-
-        var tool = new ToolConfig
-        {
-            ToolType = NewToolType,
-            VersionName = NewToolVersion,
-            ExecutablePath = NewToolPath,
-            EnvVariables = string.IsNullOrWhiteSpace(NewToolEnvVariables) ? null : NewToolEnvVariables
-        };
-
-        await _toolService.AddToolAsync(tool);
-        await LoadSettingsAsync();
         IsAddToolDialogOpen = false;
         NewToolVersion = string.Empty;
         NewToolPath = string.Empty;
         NewToolEnvVariables = string.Empty;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAddTool))]
+    private async Task AddToolAsync()
+    {
+        if (!CanAddTool) return;
+
+        var tool = new ToolConfig
+        {
+            ToolType = NewToolType,
+            VersionName = NewToolVersion.Trim(),
+            ExecutablePath = NewToolPath.Trim(),
+            EnvVariables = string.IsNullOrWhiteSpace(NewToolEnvVariables) ? null : NewToolEnvVariables.Trim()
+        };
+
+        await _toolService.AddToolAsync(tool);
+        await LoadSettingsAsync();
+        CloseAddTool();
     }
 
     [RelayCommand]
@@ -321,6 +373,8 @@ public partial class SettingsViewModel : ViewModelBase
     {
         if (!string.IsNullOrEmpty(toolType))
             NewToolType = toolType;
+        NewToolVersion = string.Empty;
+        NewToolPath = string.Empty;
         NewToolEnvVariables = string.Empty;
         IsAddToolDialogOpen = true;
     }

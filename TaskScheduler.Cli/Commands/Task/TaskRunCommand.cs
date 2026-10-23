@@ -115,7 +115,7 @@ public sealed class TaskRunCommand(
             var result = await commandExecutor.ExecuteCommandAsync(
                 command.Content,
                 command.Type,
-                command.InterpreterPath,
+                command.InterpreterVersion ?? command.InterpreterPath,
                 ct: cancellationToken);
             exitCode = result.ExitCode;
             output = result.Output;

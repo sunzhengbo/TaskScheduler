@@ -52,8 +52,8 @@ public sealed class TaskImportCommand(ITaskSchedulerService taskService) : Async
                 json = await File.ReadAllTextAsync(settings.Source, new UTF8Encoding(false), cancellationToken);
             }
             else if (settings.Source.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
-                     settings.Source.Contains(Path.DirectorySeparatorChar) ||
-                     settings.Source.Contains(Path.AltDirectorySeparatorChar) ||
+                     settings.Source.Contains('/') || settings.Source.Contains('\\') ||
+
                      settings.Source.StartsWith('.'))
             {
                 CliOutputFormatter.PrintError($"指定的导入文件不存在: {settings.Source}", settings.Json);

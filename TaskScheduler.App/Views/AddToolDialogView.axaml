@@ -7,6 +7,32 @@
              mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="560"
              x:Class="TaskScheduler.App.Views.AddToolDialogView"
              x:DataType="vm:SettingsViewModel">
+    <UserControl.Styles>
+        <Style Selector="Button.primaryAction">
+            <Setter Property="Background" Value="#2196F3" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="MinWidth" Value="72" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.primaryAction:pointerover">
+            <Setter Property="Background" Value="#1E88E5" />
+        </Style>
+        <Style Selector="Button.primaryAction:pressed">
+            <Setter Property="Background" Value="#1976D2" />
+        </Style>
+        <Style Selector="Button.primaryAction:disabled">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" />
+            <Setter Property="Cursor" Value="No" />
+        </Style>
+    </UserControl.Styles>
+
     <Border Background="{DynamicResource DialogOverlayBrush}"
             IsVisible="{Binding IsAddToolDialogOpen}">
         <Border Background="{DynamicResource DialogPanelBackgroundBrush}"
@@ -37,9 +63,7 @@
                                 BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
                                 BorderThickness="1" />
                         <Button Content="添加" Command="{Binding AddToolCommand}"
-                                Background="{DynamicResource SystemControlHighlightAccentBrush}"
-                                Foreground="White" Padding="12,6" CornerRadius="8"
-                                BorderThickness="0" Cursor="Hand" MinWidth="72" />
+                                Classes="primaryAction" />
                     </StackPanel>
                 </Border>
                 <ScrollViewer>
@@ -57,9 +81,15 @@
                             <TextBlock Text="版本名称" FontSize="13" FontWeight="Medium" />
                             <TextBox Text="{Binding NewToolVersion}" PlaceholderText="如: python3.12"
                                      FontFamily="Consolas,Courier New,monospace" />
+                            <TextBlock Text="{Binding ToolNameErrorText}"
+                                       FontSize="12"
+                                       Foreground="#F53F3F"
+                                       IsVisible="{Binding HasToolNameError}"
+                                       TextWrapping="Wrap" />
                             <TextBlock Text="给这个版本起一个便于识别的名称，会在任务配置下拉列表中显示"
                                        FontSize="12"
                                        Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       IsVisible="{Binding !HasToolNameError}"
                                        TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Spacing="6">
@@ -69,10 +99,10 @@
                                          PlaceholderText="如: /usr/bin/python3.12"
                                          FontFamily="Consolas,Courier New,monospace" />
                                 <Button Grid.Column="1" Margin="6,0,0,0"
-                                        Classes="flatBtn" Padding="10,6" Cursor="Hand"
-                                        Command="{Binding BrowseNewToolPathCommand}"
-                                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                                        BorderThickness="1">
+                                         Classes="flatBtn" Padding="10,6" Cursor="Hand"
+                                         Command="{Binding BrowseNewToolPathCommand}"
+                                         BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                         BorderThickness="1">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                         <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="14" Height="14" />
                                         <TextBlock Text="浏览" FontSize="12" />

@@ -170,30 +170,19 @@
                                       HorizontalAlignment="Stretch" />
                         </StackPanel>
                         <StackPanel Spacing="4"
-                                    IsVisible="{Binding BuiltInInterpreterPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                    IsVisible="{Binding EffectiveInterpreterPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                             <TextBlock Text="解释器路径" FontSize="13" />
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <TextBlock Grid.Column="0"
-                                           Text="{Binding BuiltInInterpreterPath}"
-                                           FontSize="11" VerticalAlignment="Center"
+                                           Text="{Binding EffectiveInterpreterPath}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                           VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
                                 <Button Grid.Column="1" Classes="Flat" Padding="4,2"
                                         FontSize="11" Content="复制路径"
                                         Command="{Binding CopyInterpreterPathCommand}"
-                                        CommandParameter="{Binding BuiltInInterpreterPath}" />
-                            </Grid>
-                        </StackPanel>
-                        <StackPanel Spacing="4"
-                                    IsVisible="{Binding Command.InterpreterPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <TextBlock Grid.Column="0"
-                                           Text="{Binding Command.InterpreterPath}"
-                                           FontSize="11" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
-                                <Button Grid.Column="1" Classes="Flat" Padding="4,2"
-                                        FontSize="11" Content="复制路径"
-                                        Command="{Binding CopyInterpreterPathCommand}"
-                                        CommandParameter="{Binding Command.InterpreterPath}" />
+                                        CommandParameter="{Binding EffectiveInterpreterPath}" />
                             </Grid>
                         </StackPanel>
                     </StackPanel>

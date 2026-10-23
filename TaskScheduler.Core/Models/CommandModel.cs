@@ -43,7 +43,31 @@ public partial class CommandModel : INotifyPropertyChanged
             if (SetField(ref _interpreterVersion, value))
             {
                 OnPropertyChanged(nameof(InterpreterPath));
+                OnPropertyChanged(nameof(InterpreterName));
             }
+        }
+    }
+
+    /// <summary>
+    /// 从解释器标识中提取纯净的版本名称（如 "pwsh (C:\path)" 提取 "pwsh"；若无路径分隔符则返回自身）。
+    /// </summary>
+    public string? InterpreterName
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(InterpreterVersion)) return null;
+            var match = InterpreterSnapshotRegex().Match(InterpreterVersion.Trim());
+            if (match.Success)
+                return match.Groups[1].Value.Trim();
+
+            // 若自身不包含路径分隔符，则自身就是版本名称
+            if (!InterpreterVersion.Contains('/') && !InterpreterVersion.Contains('\\'))
+
+            {
+                return InterpreterVersion.Trim();
+            }
+
+            return null;
         }
     }
 
@@ -55,10 +79,10 @@ public partial class CommandModel : INotifyPropertyChanged
         get
         {
             if (string.IsNullOrWhiteSpace(InterpreterVersion)) return null;
-            var match = InterpreterPathRegex().Match(InterpreterVersion);
+            var match = InterpreterSnapshotRegex().Match(InterpreterVersion.Trim());
             if (match.Success)
-                return match.Groups[1].Value;
-            return InterpreterVersion;
+                return match.Groups[2].Value.Trim();
+            return InterpreterVersion.Trim();
         }
     }
 
@@ -119,6 +143,6 @@ public partial class CommandModel : INotifyPropertyChanged
         return true;
     }
 
-    [GeneratedRegex(@"\(([^)]+)\)")]
-    private static partial Regex InterpreterPathRegex();
+    [GeneratedRegex(@"^(.+?)\s*\((.+)\)$")]
+    private static partial Regex InterpreterSnapshotRegex();
 }

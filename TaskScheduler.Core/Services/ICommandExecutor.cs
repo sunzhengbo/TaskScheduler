@@ -7,7 +7,7 @@ public interface ICommandExecutor
     Task<CommandResult> ExecuteCommandAsync(
         string command,
         string type,
-        string? interpreterPath = null,
+        string? interpreter = null,
         CancellationToken ct = default,
         string? envVariables = null);
 }

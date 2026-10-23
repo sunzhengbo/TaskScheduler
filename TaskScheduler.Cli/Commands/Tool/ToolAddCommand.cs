@@ -51,6 +51,21 @@ public sealed class ToolAddCommand(IToolConfigService toolService) : AsyncComman
             EnvVariables = string.IsNullOrWhiteSpace(settings.EnvVariables) ? null : settings.EnvVariables.Trim()
         };
 
+        var existingTools = await toolService.GetAllToolsAsync(cancellationToken);
+        if (existingTools.Any(t => t.ToolType.Equals(normalizedType, StringComparison.OrdinalIgnoreCase) &&
+                                   t.VersionName?.Trim().Equals(tool.VersionName, StringComparison.OrdinalIgnoreCase) == true))
+        {
+            CliOutputFormatter.PrintError($"【{normalizedType}】下已存在同名工具版本 '{tool.VersionName}'，名称不可重复", settings.Json);
+            return 2;
+        }
+
+        var anySameName = existingTools.FirstOrDefault(t => t.VersionName?.Trim().Equals(tool.VersionName, StringComparison.OrdinalIgnoreCase) == true);
+        if (anySameName != null)
+        {
+            CliOutputFormatter.PrintError($"已存在同名工具版本 '{tool.VersionName}'（所属类型: {anySameName.ToolType}），名称不可重复", settings.Json);
+            return 2;
+        }
+
         var added = await toolService.AddToolAsync(tool, cancellationToken);
         if (settings.SetDefault)
         {

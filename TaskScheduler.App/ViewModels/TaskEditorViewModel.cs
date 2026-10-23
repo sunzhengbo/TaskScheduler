@@ -117,6 +117,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         TestOutput = string.Empty;
         ValidationMessage = null;
         Command = new CommandModel { Name = "命令1", Type = CommandTypes.PowerShell };
+        Command.PropertyChanged += OnCommandModelPropertyChanged;
         SelectedCommandType = CommandTypes.PowerShell;
         UpdateInterpreterVersions();
     }
@@ -130,6 +131,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private AvaloniaList<string> _availableCommandTypes = [];
     [ObservableProperty] private AvaloniaList<string> _availableInterpreterVersions = [];
     [ObservableProperty] private string _selectedCommandType = CommandTypes.PowerShell;
+    [ObservableProperty] private string? _effectiveInterpreterPath;
     [ObservableProperty] private string? _builtInInterpreterPath;
 
     public AvaloniaList<string> AvailableGroups { get; } = ["DEFAULT", "SYSTEM", "USER", "DAEMON"];
@@ -160,6 +162,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
     /// <summary>
     /// 从 ToolConfigService 加载工具配置，动态构建可用的命令类型和解释器版本列表。
+    /// 遵循原则：仅列出在全局工具库中已配置，或本机环境变量中已存在的命令类型。
     /// </summary>
     private async Task LoadToolsAsync()
     {
@@ -167,18 +170,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         {
             _allTools = await _toolConfigService.GetAllToolsAsync();
 
-            // 命令类型与设置面板的工具类型保持一致
-            var commandTypes = new List<string>
-            {
-                CommandTypes.Python, CommandTypes.PowerShell, CommandTypes.NodeJs, CommandTypes.Shell
-            };
-            if (OperatingSystem.IsWindows())
-            {
-                commandTypes.Add(CommandTypes.Cmd);
-                commandTypes.Add(CommandTypes.VBScript);
-            }
-            AvailableCommandTypes = new AvaloniaList<string>(commandTypes);
-
+            RefreshAvailableCommandTypes();
             UpdateInterpreterVersions();
         }
         catch (Exception ex)
@@ -192,15 +184,46 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     }
 
     /// <summary>
-    /// 当 Command 对象变更时，同步解释器版本列表。
+    /// 根据已配置的工具库与系统环境变量，刷新可用命令类型下拉列表。
     /// </summary>
-    partial void OnCommandChanged(CommandModel value)
+    private void RefreshAvailableCommandTypes()
     {
-        UpdateInterpreterVersions();
+        var current = Command?.Type ?? SelectedCommandType;
+        var commandTypes = CommandTypes.GetConfiguredOrAvailableCommandTypes(_allTools, current);
+        AvailableCommandTypes = new AvaloniaList<string>(commandTypes);
+
+        if (!AvailableCommandTypes.Contains(SelectedCommandType) && AvailableCommandTypes.Count > 0)
+        {
+            SelectedCommandType = AvailableCommandTypes[0];
+        }
     }
 
     /// <summary>
-    /// 根据当前命令的类型，从工具配置中过滤出对应的解释器版本。
+    /// 当 Command 对象变更时，重新绑定属性监听并同步解释器版本列表。
+    /// </summary>
+    partial void OnCommandChanged(CommandModel? oldValue, CommandModel newValue)
+    {
+        if (oldValue != null)
+        {
+            oldValue.PropertyChanged -= OnCommandModelPropertyChanged;
+        }
+        if (newValue != null)
+        {
+            newValue.PropertyChanged += OnCommandModelPropertyChanged;
+        }
+        UpdateInterpreterVersions();
+    }
+
+    private void OnCommandModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CommandModel.InterpreterVersion))
+        {
+            UpdateEffectiveInterpreterPath();
+        }
+    }
+
+    /// <summary>
+    /// 根据当前命令的类型，从工具配置中过滤出对应的解释器版本，并更新有效解释器路径。
     /// </summary>
     private void UpdateInterpreterVersions()
     {
@@ -209,20 +232,88 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         {
             // 内置类型（Cmd、VBScript）无 ToolConfig，自动检测系统解释器路径
             AvailableInterpreterVersions = [];
-            BuiltInInterpreterPath = CommandTypes.DetectBuiltInInterpreterPath(Command.Type);
+            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
+            BuiltInInterpreterPath = EffectiveInterpreterPath;
+            Command.InterpreterVersion = null;
             return;
         }
 
-        BuiltInInterpreterPath = null;
-        var versions = _allTools
-            .Where(t => t.ToolType == toolType)
-            .Select(t => $"{t.VersionName} ({t.ExecutablePath})")
+        var matchingTools = _allTools
+            .Where(t => t.ToolType.Equals(toolType, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        AvailableInterpreterVersions = new AvaloniaList<string>(versions);
 
-        // 当前解释器版本不在新列表中时，重置为第一个可用版本
-        if (versions.Count == 0 || Command.InterpreterVersion == null || !versions.Contains(Command.InterpreterVersion))
-            Command.InterpreterVersion = versions.Count > 0 ? versions[0] : null;
+        if (matchingTools.Count > 0)
+        {
+            var versions = matchingTools
+                .Select(t => t.VersionName)
+                .ToList();
+            AvailableInterpreterVersions = new AvaloniaList<string>(versions);
+
+            // 获取当前任务保存的纯净版本名（兼容历史 "pwsh (C:\path)" 格式与纯名称格式）
+            var currentName = Command.InterpreterName ?? Command.InterpreterVersion;
+            var matched = versions.FirstOrDefault(v => v.Equals(currentName, StringComparison.OrdinalIgnoreCase));
+
+            if (matched != null)
+            {
+                Command.InterpreterVersion = matched;
+            }
+            else
+            {
+                // 若当前未匹配到可用版本，优先选用该工具类型的默认版本，其次选用第一个版本
+                var defaultTool = matchingTools.FirstOrDefault(t => t.IsDefault) ?? matchingTools[0];
+                Command.InterpreterVersion = defaultTool.VersionName;
+            }
+
+            UpdateEffectiveInterpreterPath();
+        }
+        else
+        {
+            // 若工具列表尚未加载完成，且当前命令已有指定的版本名称，暂不清除以防时序覆盖
+            if (!_toolsLoaded.Task.IsCompleted && !string.IsNullOrWhiteSpace(Command.InterpreterVersion))
+            {
+                return;
+            }
+
+            // 全局未配置该工具，但本机环境变量检测到了该解释器
+            AvailableInterpreterVersions = [];
+            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
+            BuiltInInterpreterPath = EffectiveInterpreterPath;
+            Command.InterpreterVersion = null;
+        }
+    }
+
+    /// <summary>
+    /// 更新当前选中的解释器版本对应的真实可执行文件物理路径。
+    /// </summary>
+    private void UpdateEffectiveInterpreterPath()
+    {
+        var toolType = CommandTypes.MapToToolType(Command.Type);
+        if (toolType == null)
+        {
+            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
+            BuiltInInterpreterPath = EffectiveInterpreterPath;
+            return;
+        }
+
+        var matchingTools = _allTools
+            .Where(t => t.ToolType.Equals(toolType, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matchingTools.Count > 0)
+        {
+            var currentName = Command.InterpreterName ?? Command.InterpreterVersion;
+            var matched = matchingTools.FirstOrDefault(t => t.VersionName.Equals(currentName, StringComparison.OrdinalIgnoreCase))
+                          ?? matchingTools.FirstOrDefault(t => t.IsDefault)
+                          ?? matchingTools[0];
+
+            EffectiveInterpreterPath = matched.ExecutablePath;
+        }
+        else
+        {
+            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
+        }
+
+        BuiltInInterpreterPath = EffectiveInterpreterPath;
     }
 
     public void OnParameterReceived(object parameter)
@@ -273,11 +364,12 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 _logger.LogWarning(ex, "反序列化命令失败: {CommandJson}", task.CommandJson);
             }
 
-            // 确保工具加载完成后再刷新解释器版本
+            // 确保工具加载完成后再刷新命令类型和解释器版本
             _toolsLoaded.Task.ContinueWith(_ =>
             {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
+                    RefreshAvailableCommandTypes();
                     UpdateInterpreterVersions();
                 });
             }, _cts.Token);
@@ -292,7 +384,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         try
         {
             var result = await _commandExecutor.ExecuteCommandAsync(
-                Command.Content, Command.Type, Command.InterpreterPath);
+                Command.Content, Command.Type, Command.InterpreterVersion ?? EffectiveInterpreterPath);
             var text = $"退出码: {result.ExitCode}";
             if (!string.IsNullOrEmpty(result.Output))
                 text += $"\n输出:\n{result.Output}";

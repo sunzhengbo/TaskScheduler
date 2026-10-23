@@ -200,28 +200,35 @@ public sealed class TaskCreateCommand(
         var toolType = CommandTypes.MapToToolType(normalizedCmdType);
         if (toolType == null)
         {
-            return string.IsNullOrWhiteSpace(userInput) ? null : $"Custom ({userInput})";
+            return string.IsNullOrWhiteSpace(userInput) ? null : userInput;
         }
 
         var matchingTools = allTools.Where(t => t.ToolType.Equals(toolType, StringComparison.OrdinalIgnoreCase)).ToList();
 
         if (!string.IsNullOrWhiteSpace(userInput))
         {
-            if (userInput.Contains('(') && userInput.Contains(')'))
-                return userInput;
+            var cleanName = userInput.Trim();
+            if (cleanName.EndsWith(')'))
+            {
+                var parenIndex = cleanName.IndexOf('(');
+                if (parenIndex > 0)
+                {
+                    cleanName = cleanName[..parenIndex].Trim();
+                }
+            }
 
             var matched = matchingTools.FirstOrDefault(t =>
-                t.VersionName.Equals(userInput, StringComparison.OrdinalIgnoreCase) ||
-                t.ExecutablePath.Equals(userInput, StringComparison.OrdinalIgnoreCase));
+                t.VersionName.Equals(cleanName, StringComparison.OrdinalIgnoreCase) ||
+                t.ExecutablePath.Equals(userInput.Trim(), StringComparison.OrdinalIgnoreCase));
 
             if (matched != null)
-                return $"{matched.VersionName} ({matched.ExecutablePath})";
+                return matched.VersionName;
 
-            return $"Custom ({userInput})";
+            return userInput;
         }
 
         var defaultTool = matchingTools.FirstOrDefault(t => t.IsDefault) ?? matchingTools.FirstOrDefault();
-        return defaultTool != null ? $"{defaultTool.VersionName} ({defaultTool.ExecutablePath})" : null;
+        return defaultTool?.VersionName;
     }
 
     private static void PopulateFromInteractiveWizard(Settings settings, IReadOnlyList<ToolConfig> allTools)
@@ -259,7 +266,7 @@ public sealed class TaskCreateCommand(
             settings.UseBootTime = AnsiConsole.Confirm("是否以系统开机时间为锚点计算触发时刻?", settings.UseBootTime);
         }
 
-        var cmdTypes = CommandTypes.GetAvailableCommandTypes();
+        var cmdTypes = CommandTypes.GetConfiguredOrAvailableCommandTypes(allTools);
         settings.CommandType = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("选择命令执行类型:")

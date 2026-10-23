@@ -5,8 +5,8 @@ namespace TaskScheduler.Core.Models;
 /// </summary>
 public static class AppMetadata
 {
-    public const string Version = "2026.10.23.a263fa1";
-    public const string ReleaseTime = "2026-10-23 13:32:29";
+    public const string Version = "2026.10.23.ac4dfe0";
+    public const string ReleaseTime = "2026-10-23 13:55:48";
     public const string UiFramework = ".NET + Avalonia UI";
     public const string CliFramework = ".NET 10.0 + Avalonia UI / Spectre.Console CLI";
     public const string Platforms = "Windows / Linux / macOS";

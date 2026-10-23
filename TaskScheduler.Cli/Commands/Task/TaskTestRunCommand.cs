@@ -68,7 +68,7 @@ public sealed class TaskTestRunCommand(
                 ? CommandTypes.Normalize(settings.Type)
                 : model.Type;
             cmdContent ??= model.Content;
-            interpreterPath ??= model.InterpreterPath;
+            interpreterPath ??= model.InterpreterVersion ?? model.InterpreterPath;
         }
         else
         {
@@ -86,9 +86,7 @@ public sealed class TaskTestRunCommand(
             if (string.IsNullOrWhiteSpace(interpreterPath))
             {
                 var allTools = await toolService.GetAllToolsAsync(cancellationToken);
-                var versionStr = TaskCreateCommand.ResolveInterpreterVersion(cmdType, null, allTools);
-                var tmpModel = new CommandModel { InterpreterVersion = versionStr };
-                interpreterPath = tmpModel.InterpreterPath;
+                interpreterPath = TaskCreateCommand.ResolveInterpreterVersion(cmdType, null, allTools);
             }
         }
 
