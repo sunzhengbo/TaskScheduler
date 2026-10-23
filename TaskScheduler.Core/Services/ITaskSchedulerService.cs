@@ -17,7 +17,7 @@ public interface ITaskSchedulerService
     Task ResumeTaskAsync(string jobName, string jobGroup, CancellationToken ct = default);
     Task PauseTriggerAsync(string triggerName, string triggerGroup, CancellationToken ct = default);
     Task ResumeTriggerAsync(string triggerName, string triggerGroup, CancellationToken ct = default);
-    Task TriggerJobAsync(string jobName, string jobGroup, CancellationToken ct = default);
+    Task<bool> TriggerJobAsync(string jobName, string jobGroup, CancellationToken ct = default);
     Task UpdateCronTriggerAsync(string triggerName, string triggerGroup, string cronExpression, CancellationToken ct = default);
     Task UpdateSimpleTriggerAsync(string triggerName, string triggerGroup, int repeatCount, TimeSpan interval, CancellationToken ct = default, bool useBootTime = false);
     Task UpdateOnStartupTriggerAsync(string triggerName, string triggerGroup, CancellationToken ct = default);

@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using TaskScheduler.Core.Models;
-
-namespace TaskScheduler.App.Models;
+namespace TaskScheduler.Core.Models;
 
 /// <summary>
 /// 任务导出/导入模型，包含任务基本信息、触发器配置和单个命令。
@@ -43,6 +39,10 @@ public class TaskExportModel
     [JsonPropertyName("useBootTime")]
     public bool UseBootTime { get; set; }
 
+    [JsonPropertyName("priority")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public TaskPriority Priority { get; set; } = TaskPriority.Normal;
+
     [JsonPropertyName("command")]
     public CommandExportModel Command { get; set; } = new();
 
@@ -77,6 +77,7 @@ public class TaskExportModel
             RepeatInterval = trigger?.RepeatInterval?.ToString() ?? "00:05:00",
             CronExpression = trigger?.CronExpression ?? string.Empty,
             UseBootTime = task.UseBootTime,
+            Priority = task.Priority,
             Command = command
         };
     }
@@ -98,30 +99,9 @@ public class TaskExportModel
         {
             return JsonSerializer.Deserialize<TaskExportModel>(json);
         }
-        catch
+        catch (JsonException)
         {
             return null;
         }
     }
-}
-
-/// <summary>
-/// 命令导出模型。
-/// </summary>
-public class CommandExportModel
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
-
-    [JsonPropertyName("type")]
-    public string Type { get; set; } = string.Empty;
-
-    [JsonPropertyName("content")]
-    public string Content { get; set; } = string.Empty;
-
-    [JsonPropertyName("interpreterVersion")]
-    public string? InterpreterVersion { get; set; }
-
-    [JsonPropertyName("description")]
-    public string? Description { get; set; }
 }

@@ -2,10 +2,9 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-
 using Microsoft.Win32;
 
-namespace TaskScheduler.App.Services;
+namespace TaskScheduler.Infra.Helpers;
 
 /// <summary>
 /// 跨平台开机自启辅助类
@@ -28,6 +27,32 @@ public static class StartupHelper
     private static string DesktopFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".config", "autostart", "taskscheduler.desktop");
+
+    /// <summary>
+    /// 解析用于开机自启的目标可执行文件路径（优先匹配桌面端 TaskScheduler.App，若不存在则回退到当前进程）
+    /// </summary>
+    public static string ResolveExecutablePath(string? customExePath = null)
+    {
+        if (!string.IsNullOrWhiteSpace(customExePath))
+            return customExePath;
+
+        var currentPath = Environment.ProcessPath ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(currentPath) &&
+            Path.GetFileNameWithoutExtension(currentPath).Equals("TaskScheduler.App", StringComparison.OrdinalIgnoreCase))
+        {
+            return currentPath;
+        }
+
+        var baseDir = AppContext.BaseDirectory;
+        var appExeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "TaskScheduler.App.exe"
+            : "TaskScheduler.App";
+        var candidatePath = Path.Combine(baseDir, appExeName);
+        if (File.Exists(candidatePath))
+            return candidatePath;
+
+        return currentPath;
+    }
 
     /// <summary>
     /// 设置或取消开机自启
@@ -55,12 +80,21 @@ public static class StartupHelper
             SyncLinuxStartup(enabled, minimize);
     }
 
+    private static bool IsCliExecutable(string exePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(exePath);
+        return name.Equals("tscli", StringComparison.OrdinalIgnoreCase) ||
+               name.EndsWith(".Cli", StringComparison.OrdinalIgnoreCase);
+    }
+
     #region Windows
 
     private static string GetWindowsCommand(bool minimize)
     {
-        var exePath = Environment.ProcessPath ?? string.Empty;
+        var exePath = ResolveExecutablePath();
         if (string.IsNullOrWhiteSpace(exePath)) return string.Empty;
+        if (IsCliExecutable(exePath))
+            return $"\"{exePath}\" daemon run";
         return minimize ? $"\"{exePath}\" --minimize" : $"\"{exePath}\"";
     }
 
@@ -125,7 +159,13 @@ public static class StartupHelper
 
     private static string BuildPlistContent(bool minimize)
     {
-        var exePath = Environment.ProcessPath ?? AppName;
+        var exePath = ResolveExecutablePath();
+        if (string.IsNullOrWhiteSpace(exePath)) exePath = AppName;
+        var escapedPath = System.Security.SecurityElement.Escape(exePath);
+        var isCli = IsCliExecutable(exePath);
+        var extraArgs = isCli
+            ? "                        <string>daemon</string>\n                        <string>run</string>"
+            : (minimize ? "                        <string>--minimize</string>" : "");
         return $"""
                 <?xml version="1.0" encoding="UTF-8"?>
                 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -135,8 +175,8 @@ public static class StartupHelper
                     <string>{PlistLabel}</string>
                     <key>ProgramArguments</key>
                     <array>
-                        <string>{exePath}</string>
-                {(minimize ? "                        <string>--minimize</string>" : "")}
+                        <string>{escapedPath}</string>
+                {extraArgs}
                     </array>
                     <key>RunAtLoad</key>
                     <true/>
@@ -202,8 +242,11 @@ public static class StartupHelper
 
     private static string BuildDesktopFileContent(bool minimize)
     {
-        var exePath = Environment.ProcessPath ?? AppName;
-        var exec = minimize ? $"{exePath} --minimize" : exePath;
+        var exePath = ResolveExecutablePath();
+        if (string.IsNullOrWhiteSpace(exePath)) exePath = AppName;
+        var exec = IsCliExecutable(exePath)
+            ? $"{exePath} daemon run"
+            : (minimize ? $"{exePath} --minimize" : exePath);
         return $"""
                 [Desktop Entry]
                 Type=Application

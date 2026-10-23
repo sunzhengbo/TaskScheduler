@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
-
+using TaskScheduler.Core.Jobs;
 using TaskScheduler.Core.Services;
 
 namespace TaskScheduler.Core;
@@ -41,6 +41,9 @@ public static class ServiceCollectionExtensions
             return Task.Run(() => factory.GetScheduler()).GetAwaiter().GetResult();
         });
 
+        services.AddSingleton<IIpcSyncService, IpcSyncService>();
+        services.AddSingleton<ICommandExecutor, CommandExecutor>();
+        services.AddTransient<CommandJob>();
         services.AddSingleton<ITaskSchedulerService, TaskSchedulerService>();
         services.AddSingleton(dbProvider);
         services.AddSingleton<IExecutionLogService, ExecutionLogService>();

@@ -1,18 +1,20 @@
+using TaskScheduler.Core.Models;
+
 namespace TaskScheduler.Core.Services;
 
 /// <summary>
 /// 应用设置服务实现（基于 SQLite）
 /// </summary>
-public class SettingsService(DatabaseProvider db) : ISettingsService
+public class SettingsService(DatabaseProvider db, IIpcSyncService? ipcSyncService = null) : ISettingsService
 {
     public async Task<string?> GetValueAsync(string key, CancellationToken ct = default)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT value FROM app_settings WHERE key = @key";
         cmd.Parameters.AddWithValue("@key", key);
-        var result = await cmd.ExecuteScalarAsync(ct);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return result?.ToString();
     }
 
@@ -28,7 +30,7 @@ public class SettingsService(DatabaseProvider db) : ISettingsService
 
     public async Task SetValueAsync(string key, string value, CancellationToken ct = default)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -38,19 +40,24 @@ public class SettingsService(DatabaseProvider db) : ISettingsService
                           """;
         cmd.Parameters.AddWithValue("@key", key);
         cmd.Parameters.AddWithValue("@value", value);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        if (ipcSyncService != null)
+        {
+            await ipcSyncService.NotifyAsync(SyncEventType.SettingsChanged, key: key, ct: ct).ConfigureAwait(false);
+        }
     }
 
     public async Task<IDictionary<string, string>> GetAllAsync(CancellationToken ct = default)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT key, value FROM app_settings ORDER BY key";
 
         var dict = new Dictionary<string, string>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             dict[reader.GetString(0)] = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
         }
@@ -59,11 +66,16 @@ public class SettingsService(DatabaseProvider db) : ISettingsService
 
     public async Task DeleteAsync(string key, CancellationToken ct = default)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "DELETE FROM app_settings WHERE key = @key";
         cmd.Parameters.AddWithValue("@key", key);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        if (ipcSyncService != null)
+        {
+            await ipcSyncService.NotifyAsync(SyncEventType.SettingsChanged, key: key, ct: ct).ConfigureAwait(false);
+        }
     }
 }

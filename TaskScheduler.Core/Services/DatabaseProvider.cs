@@ -36,6 +36,7 @@ public class DatabaseProvider
         }
 
         Infra.Helpers.DirectoryHelper.CreateParentDirectory(suffix);
+        DatabasePath = suffix;
         ConnectionString = $"{prefix}={suffix}";
 
         var policy = new SqliteConnectionPooledObjectPolicy(ConnectionString);
@@ -44,6 +45,8 @@ public class DatabaseProvider
 
     public string ConnectionString { get; }
 
+    public string DatabasePath { get; }
+
     /// <summary>
     /// 从对象池获取一个已打开的连接，释放时自动归还到池中。
     /// </summary>
@@ -51,7 +54,7 @@ public class DatabaseProvider
     {
         var conn = _pool.Get();
         if (conn.State != ConnectionState.Open)
-            await conn.OpenAsync(ct);
+            await conn.OpenAsync(ct).ConfigureAwait(false);
         return new PooledSqliteConnection(_pool, conn);
     }
 

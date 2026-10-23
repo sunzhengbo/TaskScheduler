@@ -10,13 +10,16 @@ public interface IExecutionLogService
     /// <summary>记录一次执行</summary>
     Task RecordExecutionAsync(ExecutionLog log, CancellationToken ct = default);
 
+    /// <summary>根据 ID 查询单条日志</summary>
+    Task<ExecutionLog?> GetLogByIdAsync(int id, CancellationToken ct = default);
+
     /// <summary>分页查询日志</summary>
     Task<IReadOnlyList<ExecutionLog>> GetLogsAsync(string? jobName, string? jobGroup,
-        string? status, int page, int pageSize, CancellationToken ct = default);
+        string? status, int page, int pageSize, CancellationToken ct = default, string? searchKeyword = null);
 
     /// <summary>查询总记录数（用于分页）</summary>
     Task<int> GetLogCountAsync(string? jobName, string? jobGroup,
-        string? status, CancellationToken ct = default);
+        string? status, CancellationToken ct = default, string? searchKeyword = null);
 
     /// <summary>获取单个任务的统计信息</summary>
     Task<TaskStatistics> GetStatisticsAsync(string jobName, string jobGroup, CancellationToken ct = default);

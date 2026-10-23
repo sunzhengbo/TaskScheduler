@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace TaskScheduler.App.Models;
+namespace TaskScheduler.Core.Models;
 
 public class EngineSettings
 {

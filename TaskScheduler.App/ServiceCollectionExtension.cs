@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
-using TaskScheduler.App.Jobs;
 using TaskScheduler.App.Services;
 using TaskScheduler.App.ViewModels;
 using TaskScheduler.App.Views;
@@ -45,11 +44,7 @@ public static class ServiceCollectionExtension
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<AboutViewModel>();
 
-        // App 服务
-        services.AddSingleton<ICommandExecutor, CommandExecutor>();
-        services.AddTransient<CommandJob>();
-
-        // Core 层服务（Quartz + 业务服务）
+        // Core 层服务（Quartz + 业务服务 + CommandExecutor + CommandJob）
         services.AddTaskScheduler(configuration);
     }
 
@@ -59,9 +54,9 @@ public static class ServiceCollectionExtension
         if (string.IsNullOrWhiteSpace(environment))
         {
 #if DEBUG
-                environment = "Development";
+            environment = "Development";
 #else
-                environment = "Production";
+            environment = "Production";
 #endif
         }
 

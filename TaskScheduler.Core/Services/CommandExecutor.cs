@@ -1,36 +1,38 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
 using Microsoft.Extensions.Logging;
+using TaskScheduler.Core.Models;
 
-using TaskScheduler.App.Models;
+namespace TaskScheduler.Core.Services;
 
-namespace TaskScheduler.App.Services;
-
-public interface ICommandExecutor
+public class CommandExecutor(
+    ILogger<CommandExecutor> logger,
+    IToolConfigService? toolConfigService = null) : ICommandExecutor
 {
-    Task<CommandResult> ExecuteCommandAsync(string command, string type, string? interpreterPath = null, CancellationToken ct = default);
-}
-
-public record CommandResult(int ExitCode, string Output, string Error);
-
-public class CommandExecutor : ICommandExecutor
-{
-    private readonly ILogger<CommandExecutor> _logger;
-
-    public CommandExecutor(ILogger<CommandExecutor> logger)
-    {
-        _logger = logger;
-    }
-
-    public async Task<CommandResult> ExecuteCommandAsync(string command, string type, string? interpreterPath = null, CancellationToken ct = default)
+    public async Task<CommandResult> ExecuteCommandAsync(
+        string command,
+        string type,
+        string? interpreterPath = null,
+        CancellationToken ct = default,
+        string? envVariables = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
-        _logger.LogInformation("Executing command (Type: {Type}, InterpreterPath: {InterpreterPath})", type, interpreterPath);
+        var normalizedType = CommandTypes.Normalize(type);
+        logger.LogInformation("Executing command (Type: {Type}, InterpreterPath: {InterpreterPath})", normalizedType, interpreterPath);
+
+        var resolvedEnvVars = envVariables;
+        if (string.IsNullOrWhiteSpace(resolvedEnvVars) && toolConfigService != null)
+        {
+            var toolType = CommandTypes.MapToToolType(normalizedType);
+            if (toolType != null)
+            {
+                var tools = await toolConfigService.GetToolsByTypeAsync(toolType, ct).ConfigureAwait(false);
+                var matchedTool = !string.IsNullOrWhiteSpace(interpreterPath)
+                    ? tools.FirstOrDefault(t => t.ExecutablePath.Equals(interpreterPath, StringComparison.OrdinalIgnoreCase))
+                    : tools.FirstOrDefault(t => t.IsDefault) ?? tools.FirstOrDefault();
+                resolvedEnvVars = matchedTool?.EnvVariables;
+            }
+        }
 
         var processStartInfo = new ProcessStartInfo
         {
@@ -40,10 +42,14 @@ public class CommandExecutor : ICommandExecutor
             UseShellExecute = false
         };
 
-        switch (type)
+        ApplyEnvironmentVariables(processStartInfo, resolvedEnvVars);
+
+        switch (normalizedType)
         {
             case CommandTypes.PowerShell:
-                processStartInfo.FileName = "pwsh.exe";
+                processStartInfo.FileName = !string.IsNullOrWhiteSpace(interpreterPath)
+                    ? interpreterPath
+                    : ResolveDefaultPowerShellExecutable();
                 processStartInfo.StandardOutputEncoding = Encoding.UTF8;
                 processStartInfo.StandardErrorEncoding = Encoding.UTF8;
                 processStartInfo.Environment["NO_COLOR"] = "1";
@@ -64,7 +70,7 @@ public class CommandExecutor : ICommandExecutor
                 break;
 
             case CommandTypes.Shell:
-                processStartInfo.FileName = "bash";
+                processStartInfo.FileName = !string.IsNullOrWhiteSpace(interpreterPath) ? interpreterPath : "bash";
                 processStartInfo.ArgumentList.Add("-c");
                 processStartInfo.ArgumentList.Add(command);
                 break;
@@ -79,12 +85,12 @@ public class CommandExecutor : ICommandExecutor
                 // VBScript 需要通过临时文件执行，cscript 不支持内联代码
                 if (!OperatingSystem.IsWindows())
                     return new CommandResult(-1, string.Empty, "VBScript is only supported on Windows.");
-                return await ExecuteVBScriptAsync(command, interpreterPath, ct);
+                return await ExecuteVBScriptAsync(command, interpreterPath, resolvedEnvVars, ct).ConfigureAwait(false);
 
             case CommandTypes.Cmd:
                 if (!OperatingSystem.IsWindows())
                     return new CommandResult(-1, string.Empty, "Cmd is only supported on Windows.");
-                processStartInfo.FileName = "cmd.exe";
+                processStartInfo.FileName = !string.IsNullOrWhiteSpace(interpreterPath) ? interpreterPath : "cmd.exe";
                 processStartInfo.ArgumentList.Add("/C");
                 processStartInfo.ArgumentList.Add(command);
                 break;
@@ -105,8 +111,8 @@ public class CommandExecutor : ICommandExecutor
             outputTask = process.StandardOutput.ReadToEndAsync(ct);
             errorTask = process.StandardError.ReadToEndAsync(ct);
 
-            await Task.WhenAll(outputTask, errorTask);
-            await process.WaitForExitAsync(ct);
+            await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -114,23 +120,44 @@ public class CommandExecutor : ICommandExecutor
             throw;
         }
 
-        var outputText = await outputTask;
-        var errorText = await errorTask;
+        var outputText = await outputTask.ConfigureAwait(false);
+        var errorText = await errorTask.ConfigureAwait(false);
 
-        _logger.LogInformation("Command executed with exit code: {ExitCode}", process.ExitCode);
+        logger.LogInformation("Command executed with exit code: {ExitCode}", process.ExitCode);
 
         return new CommandResult(process.ExitCode, outputText ?? string.Empty, errorText ?? string.Empty);
+    }
+
+    private static void ApplyEnvironmentVariables(ProcessStartInfo psi, string? envVariables)
+    {
+        if (string.IsNullOrWhiteSpace(envVariables))
+            return;
+
+        var entries = envVariables.Split([';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var entry in entries)
+        {
+            var eqIndex = entry.IndexOf('=');
+            if (eqIndex <= 0)
+                continue;
+
+            var key = entry[..eqIndex].Trim();
+            var val = entry[(eqIndex + 1)..].Trim();
+            if (!string.IsNullOrEmpty(key))
+            {
+                psi.Environment[key] = val;
+            }
+        }
     }
 
     /// <summary>
     /// 执行 VBScript 脚本。cscript.exe 不支持内联代码，需写入临时文件后执行。
     /// </summary>
-    private async Task<CommandResult> ExecuteVBScriptAsync(string command, string? interpreterPath, CancellationToken ct)
+    private async Task<CommandResult> ExecuteVBScriptAsync(string command, string? interpreterPath, string? envVariables, CancellationToken ct)
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"taskscheduler_{Guid.NewGuid():N}.vbs");
         try
         {
-            await File.WriteAllTextAsync(tempFile, command, ct);
+            await File.WriteAllTextAsync(tempFile, command, ct).ConfigureAwait(false);
 
             var processStartInfo = new ProcessStartInfo
             {
@@ -140,6 +167,7 @@ public class CommandExecutor : ICommandExecutor
                 CreateNoWindow = true,
                 UseShellExecute = false
             };
+            ApplyEnvironmentVariables(processStartInfo, envVariables);
             processStartInfo.ArgumentList.Add("//NoLogo");
             processStartInfo.ArgumentList.Add(tempFile);
 
@@ -154,8 +182,8 @@ public class CommandExecutor : ICommandExecutor
             {
                 outputTask = process.StandardOutput.ReadToEndAsync(ct);
                 errorTask = process.StandardError.ReadToEndAsync(ct);
-                await Task.WhenAll(outputTask, errorTask);
-                await process.WaitForExitAsync(ct);
+                await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+                await process.WaitForExitAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -163,15 +191,46 @@ public class CommandExecutor : ICommandExecutor
                 throw;
             }
 
-            var outputText = await outputTask;
-            var errorText = await errorTask;
+            var outputText = await outputTask.ConfigureAwait(false);
+            var errorText = await errorTask.ConfigureAwait(false);
 
-            _logger.LogInformation("VBScript executed with exit code: {ExitCode}", process.ExitCode);
+            logger.LogInformation("VBScript executed with exit code: {ExitCode}", process.ExitCode);
             return new CommandResult(process.ExitCode, outputText ?? string.Empty, errorText ?? string.Empty);
         }
         finally
         {
-            try { File.Delete(tempFile); } catch (Exception ex) { _logger.LogWarning(ex, "清理 VBScript 临时文件失败: {Path}", tempFile); }
+            try { File.Delete(tempFile); } catch (Exception ex) { logger.LogWarning(ex, "清理 VBScript 临时文件失败: {Path}", tempFile); }
         }
+    }
+
+    private static string ResolveDefaultPowerShellExecutable()
+    {
+        if (IsExecutableInPath("pwsh.exe") || IsExecutableInPath("pwsh"))
+            return "pwsh";
+
+        if (OperatingSystem.IsWindows())
+            return "powershell.exe";
+
+        return "pwsh";
+    }
+
+    private static bool IsExecutableInPath(string exeName)
+    {
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(pathEnv)) return false;
+
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            try
+            {
+                if (File.Exists(Path.Combine(dir, exeName)))
+                    return true;
+            }
+            catch
+            {
+                // 忽略无效 PATH 路径
+            }
+        }
+        return false;
     }
 }

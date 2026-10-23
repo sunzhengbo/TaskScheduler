@@ -2,12 +2,14 @@ param(
     [ValidateSet("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")]
     [string]$Runtime = "",
     [switch]$All,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
 $SolutionDir = $PSScriptRoot
 $ProjectPath = Join-Path $SolutionDir "TaskScheduler.App\TaskScheduler.App.csproj"
+$TestProjectPath = Join-Path $SolutionDir "TaskScheduler.Tests\TaskScheduler.Tests.csproj"
 $PublishBase = Join-Path $SolutionDir "publish"
 
 function Get-CommitHash {
@@ -26,32 +28,53 @@ function Get-BuildVersion {
     return "$date.$commit"
 }
 
-function Update-AboutViewModel {
+function Update-AppMetadata {
     param(
         [string]$Version
     )
 
-    $viewModelPath = Join-Path $SolutionDir "TaskScheduler.App\ViewModels\AboutViewModel.cs"
-    if (-not (Test-Path $viewModelPath)) {
-        Write-Warning "AboutViewModel.cs not found, skipping version update"
+    $metadataPath = Join-Path $SolutionDir "TaskScheduler.Core\Models\AppMetadata.cs"
+    if (-not (Test-Path $metadataPath)) {
+        Write-Warning "AppMetadata.cs not found, skipping version update"
         return
     }
 
     $releaseTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
-    $lines = Get-Content -Path $viewModelPath
+    $lines = Get-Content -Path $metadataPath
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
-        if ($line -match '_version = "') {
-            $lines[$i] = $line -replace '_version = "[^"]*"', "_version = `"$Version`""
+        if ($line -match 'Version = "') {
+            $lines[$i] = $line -replace 'Version = "[^"]*"', "Version = `"$Version`""
         }
-        if ($line -match '_releaseTime = "') {
-            $lines[$i] = $line -replace '_releaseTime = "[^"]*"', "_releaseTime = `"$releaseTime`""
+        if ($line -match 'ReleaseTime = "') {
+            $lines[$i] = $line -replace 'ReleaseTime = "[^"]*"', "ReleaseTime = `"$releaseTime`""
         }
     }
-    $lines | Set-Content -Path $viewModelPath
+    $lines | Set-Content -Path $metadataPath
 
-    Write-Host "  Updated AboutViewModel: Version=$Version, ReleaseTime=$releaseTime" -ForegroundColor DarkGray
+    Write-Host "  Updated AppMetadata: Version=$Version, ReleaseTime=$releaseTime" -ForegroundColor DarkGray
+}
+
+function Invoke-Tests {
+    if ($SkipTests) {
+        Write-Host "Skipping tests (-SkipTests specified)" -ForegroundColor Yellow
+        return
+    }
+
+    if (-not (Test-Path $TestProjectPath)) {
+        Write-Warning "Test project not found at $TestProjectPath, skipping tests"
+        return
+    }
+
+    Write-Host ""
+    Write-Host "=== Running Unit & Regression Tests ===" -ForegroundColor Cyan
+    & dotnet test $TestProjectPath -c Release
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Tests failed! Aborting build."
+        exit 1
+    }
+    Write-Host "Tests passed successfully." -ForegroundColor Green
 }
 
 function Invoke-Build {
@@ -62,7 +85,7 @@ function Invoke-Build {
     $version = Get-BuildVersion
     $outputDir = Join-Path $PublishBase $Rid
 
-    Update-AboutViewModel -Version $version
+    Update-AppMetadata -Version $version
 
     Write-Host ""
     Write-Host "=== Building for $Rid ===" -ForegroundColor Cyan
@@ -104,6 +127,16 @@ function Invoke-Build {
         }
     }
 
+    # Ensure README.md and README.zh-CN.md are present in package
+    $readmeFiles = @("README.md", "README.zh-CN.md")
+    foreach ($rm in $readmeFiles) {
+        $sourceRm = Join-Path $SolutionDir $rm
+        $destRm = Join-Path $outputDir $rm
+        if ((Test-Path $sourceRm) -and (-not (Test-Path $destRm))) {
+            Copy-Item -Path $sourceRm -Destination $destRm -Force
+        }
+    }
+
     Write-Host "Build succeeded: $Rid" -ForegroundColor Green
 
     New-Archive -Rid $Rid -Version $version -SourceDir $outputDir
@@ -127,6 +160,15 @@ function New-Archive {
         Compress-Archive -Path "$SourceDir\*" -DestinationPath $archivePath -Force
     } else {
         $archivePath = "$archivePath.tar.gz"
+
+        # Ensure executable permissions for Unix binaries before archiving
+        if (Get-Command chmod -ErrorAction SilentlyContinue) {
+            $appBin = Join-Path $SourceDir "TaskScheduler.App"
+            $cliBin = Join-Path $SourceDir "tscli"
+            if (Test-Path $appBin) { & chmod +x $appBin }
+            if (Test-Path $cliBin) { & chmod +x $cliBin }
+        }
+
         Push-Location $SourceDir
         & tar -czf $archivePath -C $SourceDir .
         Pop-Location
@@ -144,17 +186,26 @@ function New-Archive {
 
 if ($Clean -and (Test-Path $PublishBase)) {
     Write-Host "Cleaning publish directory..." -ForegroundColor Yellow
-    Remove-Item -Recurse -Force $PublishBase
+    try {
+        Remove-Item -Recurse -Force $PublishBase -ErrorAction Stop
+    } catch {
+        Write-Warning "Could not completely clean publish directory (some files may be in use): $_"
+    }
 }
+
+Invoke-Tests
 
 if ($All) {
     $targets = @("win-x64", "linux-x64", "osx-x64")
     # Auto-detect ARM64
-    if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq "Arm64") {
-        switch ($PSVersionTable.OS) {
-            { $_ -like "*Windows*" } { $targets = @("win-arm64") }
-            { $_ -like "*Linux*" }   { $targets = @("linux-arm64") }
-            { $_ -like "*Darwin*" }  { $targets = @("osx-arm64") }
+    $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().Equals("Arm64", [StringComparison]::OrdinalIgnoreCase)
+    if ($isArm64) {
+        if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+            $targets = @("win-arm64")
+        } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
+            $targets = @("linux-arm64")
+        } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
+            $targets = @("osx-arm64")
         }
     }
 
@@ -165,20 +216,16 @@ if ($All) {
     Invoke-Build -Rid $Runtime
 } else {
     # Auto-detect current platform
-    switch ($PSVersionTable.OS) {
-        { $_ -like "*Windows*" } {
-            $Runtime = if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq "Arm64") { "win-arm64" } else { "win-x64" }
-        }
-        { $_ -like "*Linux*" } {
-            $Runtime = if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq "Arm64") { "linux-arm64" } else { "linux-x64" }
-        }
-        { $_ -like "*Darwin*" } {
-            $Runtime = if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq "Arm64") { "osx-arm64" } else { "osx-x64" }
-        }
-        default {
-            Write-Error "Cannot detect platform. Please specify -Runtime explicitly."
-            exit 1
-        }
+    $isArm64 = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().Equals("Arm64", [StringComparison]::OrdinalIgnoreCase)
+    if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+        $Runtime = if ($isArm64) { "win-arm64" } else { "win-x64" }
+    } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
+        $Runtime = if ($isArm64) { "linux-arm64" } else { "linux-x64" }
+    } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
+        $Runtime = if ($isArm64) { "osx-arm64" } else { "osx-x64" }
+    } else {
+        Write-Error "Cannot detect platform. Please specify -Runtime explicitly."
+        exit 1
     }
     Invoke-Build -Rid $Runtime
 }

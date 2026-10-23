@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 
 using Avalonia.Controls.Notifications;
 
-using TaskScheduler.App.Models;
 using TaskScheduler.App.ViewModels;
 using TaskScheduler.App.Services;
 using TaskScheduler.Core.Models;

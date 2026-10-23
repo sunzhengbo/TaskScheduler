@@ -21,7 +21,6 @@ using Microsoft.Extensions.Logging;
 using Ursa.Controls;
 using Avalonia.Controls.Notifications;
 
-using TaskScheduler.App.Models;
 using TaskScheduler.App.Services;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;

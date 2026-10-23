@@ -9,13 +9,16 @@ using TaskScheduler.Core.Models;
 
 namespace TaskScheduler.Core.Services;
 
-public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerService> logger) : ITaskSchedulerService
+public class TaskSchedulerService(
+    IScheduler scheduler,
+    ILogger<TaskSchedulerService> logger,
+    IIpcSyncService? ipcSyncService = null) : ITaskSchedulerService
 {
     /// <summary>
     /// 将标准 5 字段 Unix cron 表达式转换为 Quartz.NET 6 字段格式。
     /// 若已是 6-7 字段则原样返回。
     /// </summary>
-    private static string NormalizeCronExpression(string cronExpression)
+    public static string NormalizeCronExpression(string cronExpression)
     {
         var parts = cronExpression.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 5)
@@ -47,15 +50,13 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
     [DllImport("kernel32.dll")]
     private static extern bool QueryUnbiasedInterruptTime(out ulong unbiasedTime);
 
-    private static DateTimeOffset? GetWindowsBootTime()
+    private static DateTimeOffset? GetWindowsBootTime(ILogger? logger = null)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return null;
 
         try
         {
-            // 通过查询系统日志 Microsoft-Windows-Kernel-Boot/Operational 里的最新事件时间来作为准确的开机/启动时间点
-            // 该日志包含了冷启动（Cold Boot）、快速启动（Fast Startup）和休眠唤醒等启动事件，且排除了普通的 S3 睡眠唤醒，非常契合“开机时间”的定义
             var query = new EventLogQuery("Microsoft-Windows-Kernel-Boot/Operational", PathType.LogName)
             {
                 ReverseDirection = true
@@ -67,27 +68,26 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                 return DateTime.SpecifyKind(record.TimeCreated.Value, DateTimeKind.Local).ToUniversalTime();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略异常，降级回常规计算
+            logger?.LogWarning(ex, "读取 Windows 开机事件日志失败，降级使用 Uptime/TickCount 计算");
         }
         return null;
     }
 
-    private static DateTimeOffset CalculateStartTime(bool useBootTime, TimeSpan interval)
+    private static DateTimeOffset CalculateStartTime(bool useBootTime, TimeSpan interval, ILogger? logger = null)
     {
         if (!useBootTime)
             return DateTimeOffset.UtcNow.Add(interval);
 
         DateTimeOffset bootTime;
-        var eventBootTime = GetWindowsBootTime();
+        var eventBootTime = GetWindowsBootTime(logger);
         if (eventBootTime.HasValue)
         {
             bootTime = eventBootTime.Value;
         }
         else
         {
-            // 使用系统启动时间戳计算开机时间点（作为无日志访问权限或非Windows平台时的降级方案）
             double uptimeSeconds;
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && QueryUnbiasedInterruptTime(out ulong unbiasedTime))
             {
@@ -101,13 +101,11 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             bootTime = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(uptimeSeconds);
         }
 
-        // 对齐到开机时间网格：bootTime + N * interval（N ≥ 1），且严格 > now
         var elapsed = DateTimeOffset.UtcNow - bootTime;
         var intervalsNeeded = (long)Math.Ceiling(elapsed.TotalMilliseconds / interval.TotalMilliseconds);
         if (intervalsNeeded < 1) intervalsNeeded = 1;
 
         var result = bootTime + TimeSpan.FromTicks(interval.Ticks * intervalsNeeded);
-        // 边界保护：若恰好对齐网格点（result == now），推进到下一个网格点，避免 Quartz 误判为 misfire
         if (result <= DateTimeOffset.UtcNow)
             result += interval;
 
@@ -116,17 +114,17 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
     private static string GetTriggerName(string jobName) => $"{jobName}_trigger";
 
-    /// <summary>
-    /// 计算 SimpleTrigger 重新调度后的剩余触发次数。
-    /// Quartz 中 RepeatCount=N 表示总触发 N+1 次，TimesTriggered 为已触发次数。
-    /// 剩余总次数 = RepeatCount + 1 - TimesTriggered，
-    /// 但 WithRepeatCount(M) 创建的新触发器总触发 M+1 次，
-    /// 因此需设为 (剩余总次数 - 1) = RepeatCount - TimesTriggered。
-    /// </summary>
     private static int CalculateRemainingCount(int repeatCount, int timesTriggered)
     {
         if (repeatCount == -1) return -1;
         return Math.Max(0, repeatCount - timesTriggered);
+    }
+
+    private Task NotifyTasksChangedAsync(string? jobName = null, string? jobGroup = null, CancellationToken ct = default)
+    {
+        return ipcSyncService != null
+            ? ipcSyncService.NotifyAsync(SyncEventType.TasksChanged, jobName, jobGroup, ct: ct)
+            : Task.CompletedTask;
     }
 
     public async Task<string> CreateTaskAsync(TaskCreateRequest request, CancellationToken ct = default)
@@ -146,6 +144,11 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             }
         }
 
+        if (request.TriggerType == TriggerType.OnStartup)
+        {
+            jobDataMap["RunOnStartup"] = true.ToString();
+        }
+
         var jobDetail = JobBuilder.Create(request.JobType)
             .WithIdentity(jobKey)
             .WithDescription(request.Description)
@@ -153,12 +156,19 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             .StoreDurably()
             .Build();
 
+        if (request.TriggerType == TriggerType.OnStartup)
+        {
+            await scheduler.AddJob(jobDetail, replace: true, ct).ConfigureAwait(false);
+            await NotifyTasksChangedAsync(request.Name, request.Group, ct).ConfigureAwait(false);
+            return $"{request.Group}.{request.Name}";
+        }
+
         ITrigger trigger;
         var triggerKey = new TriggerKey(GetTriggerName(request.Name), request.Group);
 
         if (request.TriggerType == TriggerType.Simple)
         {
-            var startTime = CalculateStartTime(request.UseBootTime, request.RepeatInterval);
+            var startTime = CalculateStartTime(request.UseBootTime, request.RepeatInterval, logger);
             trigger = TriggerBuilder.Create()
                 .WithIdentity(triggerKey)
                 .WithSimpleSchedule(x => x
@@ -167,18 +177,6 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                     .WithMisfireHandlingInstructionNextWithRemainingCount())
                 .StartAt(startTime)
                 .Build();
-        }
-        else if (request.TriggerType == TriggerType.OnStartup)
-        {
-            jobDataMap["RunOnStartup"] = true.ToString();
-            jobDetail = JobBuilder.Create(request.JobType)
-                .WithIdentity(jobKey)
-                .WithDescription(request.Description)
-                .UsingJobData(jobDataMap)
-                .StoreDurably()
-                .Build();
-            await scheduler.AddJob(jobDetail, replace: true, ct);
-            return $"{request.Group}.{request.Name}";
         }
         else
         {
@@ -192,27 +190,29 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                 .Build();
         }
 
-        await scheduler.ScheduleJob(jobDetail, trigger, ct);
+        await scheduler.ScheduleJob(jobDetail, trigger, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(request.Name, request.Group, ct).ConfigureAwait(false);
         return $"{request.Group}.{request.Name}";
     }
 
     public async Task DeleteTaskAsync(string jobName, string jobGroup, CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
-        await scheduler.DeleteJob(jobKey, ct);
+        await scheduler.DeleteJob(jobKey, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(jobName, jobGroup, ct).ConfigureAwait(false);
     }
 
     public async Task DeleteTaskById(string taskId, CancellationToken ct = default)
     {
         var (group, name) = ParseTaskId(taskId);
-        await DeleteTaskAsync(name, group, ct);
+        await DeleteTaskAsync(name, group, ct).ConfigureAwait(false);
     }
 
     public async Task UpdateTaskAsync(string jobName, string jobGroup, TaskUpdateRequest request,
         CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
-        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
         if (jobDetail == null)
         {
             throw new InvalidOperationException($"Job '{jobGroup}.{jobName}' not found.");
@@ -242,30 +242,31 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             .StoreDurably()
             .Build();
 
-        await scheduler.AddJob(newJob, true, true, ct);
+        await scheduler.AddJob(newJob, true, true, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(jobName, jobGroup, ct).ConfigureAwait(false);
     }
 
     public async Task<ScheduledTaskDetail?> GetTaskAsync(string jobName, string jobGroup,
         CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
-        return await GetTaskDetailAsync(jobKey, ct);
+        return await GetTaskDetailAsync(jobKey, ct).ConfigureAwait(false);
     }
 
     public async Task<ScheduledTaskDetail?> GetTaskById(string taskId, CancellationToken ct = default)
     {
         var (group, name) = ParseTaskId(taskId);
-        return await GetTaskAsync(name, group, ct);
+        return await GetTaskAsync(name, group, ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ScheduledTaskDetail>> GetAllTasksAsync(CancellationToken ct = default)
     {
-        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct);
+        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct).ConfigureAwait(false);
         var tasks = new List<ScheduledTaskDetail>();
 
         foreach (var jobKey in jobKeys)
         {
-            var task = await GetTaskDetailAsync(jobKey, ct);
+            var task = await GetTaskDetailAsync(jobKey, ct).ConfigureAwait(false);
             if (task != null)
             {
                 tasks.Add(task);
@@ -279,12 +280,12 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
         CancellationToken ct = default)
     {
         var matcher = GroupMatcher<JobKey>.GroupEquals(groupName);
-        var jobKeys = await scheduler.GetJobKeys(matcher, ct);
+        var jobKeys = await scheduler.GetJobKeys(matcher, ct).ConfigureAwait(false);
         var tasks = new List<ScheduledTaskDetail>();
 
         foreach (var jobKey in jobKeys)
         {
-            var task = await GetTaskDetailAsync(jobKey, ct);
+            var task = await GetTaskDetailAsync(jobKey, ct).ConfigureAwait(false);
             if (task != null)
             {
                 tasks.Add(task);
@@ -296,99 +297,120 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
     public async Task<IReadOnlyList<string>> GetJobGroupsAsync(CancellationToken ct = default)
     {
-        var groups = await scheduler.GetJobGroupNames(ct);
+        var groups = await scheduler.GetJobGroupNames(ct).ConfigureAwait(false);
         return groups.ToList();
     }
 
     public async Task PauseTaskAsync(string jobName, string jobGroup, CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
-        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
         if (jobDetail == null) return;
 
-        // OnStartup 任务没有真实触发器，PauseJob 是空操作
-        // 改为在 JobDataMap 中标记暂停状态，供 GetTaskDetailAsync 和 TriggerAllStartupTasksAsync 读取
         if (IsRunOnStartup(jobDetail))
         {
             jobDetail.JobDataMap["IsPaused"] = "true";
-            await scheduler.AddJob(jobDetail, replace: true, ct);
+            await scheduler.AddJob(jobDetail, replace: true, ct).ConfigureAwait(false);
+            await NotifyTasksChangedAsync(jobName, jobGroup, ct).ConfigureAwait(false);
             return;
         }
 
-        await scheduler.PauseJob(jobKey, ct);
+        await scheduler.PauseJob(jobKey, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(jobName, jobGroup, ct).ConfigureAwait(false);
     }
 
     public async Task ResumeTaskAsync(string jobName, string jobGroup, CancellationToken ct = default)
     {
         var jobKey = new JobKey(jobName, jobGroup);
-        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
         if (jobDetail == null) return;
 
         if (IsRunOnStartup(jobDetail))
         {
             jobDetail.JobDataMap.Remove("IsPaused");
-            await scheduler.AddJob(jobDetail, replace: true, ct);
+            await scheduler.AddJob(jobDetail, replace: true, ct).ConfigureAwait(false);
+            await NotifyTasksChangedAsync(jobName, jobGroup, ct).ConfigureAwait(false);
             return;
         }
 
-        await scheduler.ResumeJob(jobKey, ct);
+        await scheduler.ResumeJob(jobKey, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(jobName, jobGroup, ct).ConfigureAwait(false);
     }
 
     public async Task PauseTriggerAsync(string triggerName, string triggerGroup, CancellationToken ct = default)
     {
         var triggerKey = new TriggerKey(triggerName, triggerGroup);
-        await scheduler.PauseTrigger(triggerKey, ct);
+        await scheduler.PauseTrigger(triggerKey, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(ct: ct).ConfigureAwait(false);
     }
 
     public async Task ResumeTriggerAsync(string triggerName, string triggerGroup, CancellationToken ct = default)
     {
         var triggerKey = new TriggerKey(triggerName, triggerGroup);
-        await scheduler.ResumeTrigger(triggerKey, ct);
+        await scheduler.ResumeTrigger(triggerKey, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(ct: ct).ConfigureAwait(false);
     }
 
-    public async Task TriggerJobAsync(string jobName, string jobGroup, CancellationToken ct = default)
+    public async Task<bool> TriggerJobAsync(string jobName, string jobGroup, CancellationToken ct = default)
     {
+        if (ipcSyncService != null)
+        {
+            return await ipcSyncService.RequestTriggerJobNowAsync(jobName, jobGroup, ct).ConfigureAwait(false);
+        }
+
         var jobKey = new JobKey(jobName, jobGroup);
-        await scheduler.TriggerJob(jobKey, ct);
+        await scheduler.TriggerJob(jobKey, ct).ConfigureAwait(false);
+        return true;
     }
 
     public async Task UpdateCronTriggerAsync(string triggerName, string triggerGroup, string cronExpression,
         CancellationToken ct = default)
     {
         var triggerKey = new TriggerKey(triggerName, triggerGroup);
-        var oldTrigger = await scheduler.GetTrigger(triggerKey, ct);
-        if (oldTrigger == null)
-        {
-            throw new InvalidOperationException($"Trigger '{triggerGroup}.{triggerName}' not found.");
-        }
+        var oldTrigger = await scheduler.GetTrigger(triggerKey, ct).ConfigureAwait(false);
+        var jobName = triggerName.EndsWith("_trigger", StringComparison.Ordinal)
+            ? triggerName[..^"_trigger".Length]
+            : triggerName;
+        var jobKey = new JobKey(jobName, triggerGroup);
 
         var normalizedCron = NormalizeCronExpression(cronExpression);
-        var newTrigger = TriggerBuilder.Create()
+        var builder = TriggerBuilder.Create()
             .WithIdentity(triggerKey)
+            .ForJob(jobKey)
             .WithCronSchedule(normalizedCron, x => x
                 .InTimeZone(TimeZoneInfo.Local)
                 .WithMisfireHandlingInstructionFireAndProceed())
-            .StartAt(DateTimeOffset.UtcNow)
-            .Build();
+            .StartAt(DateTimeOffset.UtcNow);
 
-        PreservePreviousFireTime(oldTrigger, newTrigger);
+        var newTrigger = builder.Build();
 
-        await scheduler.RescheduleJob(triggerKey, newTrigger, ct);
+        if (oldTrigger != null)
+        {
+            PreservePreviousFireTime(oldTrigger, newTrigger);
+            await scheduler.RescheduleJob(triggerKey, newTrigger, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await scheduler.ScheduleJob(newTrigger, ct).ConfigureAwait(false);
+        }
+
+        await NotifyTasksChangedAsync(jobName, triggerGroup, ct).ConfigureAwait(false);
     }
 
     public async Task UpdateSimpleTriggerAsync(string triggerName, string triggerGroup, int repeatCount,
         TimeSpan interval, CancellationToken ct = default, bool useBootTime = false)
     {
         var triggerKey = new TriggerKey(triggerName, triggerGroup);
-        var oldTrigger = await scheduler.GetTrigger(triggerKey, ct);
-        if (oldTrigger == null)
-        {
-            throw new InvalidOperationException($"Trigger '{triggerGroup}.{triggerName}' not found.");
-        }
+        var oldTrigger = await scheduler.GetTrigger(triggerKey, ct).ConfigureAwait(false);
+        var jobName = triggerName.EndsWith("_trigger", StringComparison.Ordinal)
+            ? triggerName[..^"_trigger".Length]
+            : triggerName;
+        var jobKey = new JobKey(jobName, triggerGroup);
 
-        var startTime = CalculateStartTime(useBootTime, interval);
+        var startTime = CalculateStartTime(useBootTime, interval, logger);
         var newTrigger = TriggerBuilder.Create()
             .WithIdentity(triggerKey)
+            .ForJob(jobKey)
             .WithSimpleSchedule(x => x
                 .WithRepeatCount(repeatCount)
                 .WithInterval(interval)
@@ -398,35 +420,40 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
         if (useBootTime)
         {
-            // 开机时间模式：将 previousFireTime 对齐到开机时间网格（startTime - interval），
-            // 避免旧的非网格对齐值导致 Quartz 计算 nextFireTime 偏离网格
             SetBootTimePreviousFireTime(newTrigger, startTime, interval);
         }
-        else
+        else if (oldTrigger != null)
         {
             PreservePreviousFireTime(oldTrigger, newTrigger);
         }
 
-        await scheduler.RescheduleJob(triggerKey, newTrigger, ct);
+        if (oldTrigger != null)
+        {
+            await scheduler.RescheduleJob(triggerKey, newTrigger, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await scheduler.ScheduleJob(newTrigger, ct).ConfigureAwait(false);
+        }
+
+        await NotifyTasksChangedAsync(jobName, triggerGroup, ct).ConfigureAwait(false);
     }
 
     public async Task UpdateOnStartupTriggerAsync(string triggerName, string triggerGroup,
         CancellationToken ct = default)
     {
-        // 触发器名称格式为 {JobName}_trigger，还原为 JobKey
         var jobName = triggerName.EndsWith("_trigger", StringComparison.Ordinal)
             ? triggerName[..^"_trigger".Length]
             : triggerName;
         var jobKey = new JobKey(jobName, triggerGroup);
-        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
         if (jobDetail == null)
             throw new InvalidOperationException($"Job '{triggerGroup}.{jobName}' not found.");
 
-        // 删除旧触发器（兼容旧数据：之前 OnStartup 有关联的 SimpleTrigger）
-        var triggers = await scheduler.GetTriggersOfJob(jobKey, ct);
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, ct).ConfigureAwait(false);
         foreach (var t in triggers)
         {
-            await scheduler.UnscheduleJob(t.Key, ct);
+            await scheduler.UnscheduleJob(t.Key, ct).ConfigureAwait(false);
         }
 
         jobDetail.JobDataMap["RunOnStartup"] = true.ToString();
@@ -436,28 +463,28 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             .UsingJobData(jobDetail.JobDataMap)
             .StoreDurably()
             .Build();
-        await scheduler.AddJob(updatedJob, replace: true, ct);
+        await scheduler.AddJob(updatedJob, replace: true, ct).ConfigureAwait(false);
+        await NotifyTasksChangedAsync(jobName, triggerGroup, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public async Task RescheduleAllSimpleTriggersAsync(CancellationToken ct = default)
     {
-        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct);
+        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct).ConfigureAwait(false);
         var count = 0;
 
         foreach (var jobKey in jobKeys)
         {
-            var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+            var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
             if (jobDetail == null)
                 continue;
 
-            var triggers = await scheduler.GetTriggersOfJob(jobKey, ct);
+            var triggers = await scheduler.GetTriggersOfJob(jobKey, ct).ConfigureAwait(false);
             foreach (var trigger in triggers)
             {
                 if (trigger is not ISimpleTrigger simpleTrigger)
                     continue;
 
-                // 只处理任务自身的命名触发器
                 var expectedName = GetTriggerName(jobKey.Name);
                 if (trigger.Key.Name != expectedName)
                     continue;
@@ -468,21 +495,16 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                     useBootTime = bool.TryParse(bootVal?.ToString(), out var b) && b;
                 }
 
-                // 跳过 OnStartup 任务，它们有自己的触发逻辑
                 if (IsRunOnStartup(jobDetail))
                     continue;
 
                 var interval = simpleTrigger.RepeatInterval;
                 if (interval <= TimeSpan.Zero) continue;
 
-                // 记录原始触发器状态
-                var originalState = await scheduler.GetTriggerState(trigger.Key, ct);
-
-                // 已完成的触发器无需重新调度，跳过以避免意外多执行一次
+                var originalState = await scheduler.GetTriggerState(trigger.Key, ct).ConfigureAwait(false);
                 if (originalState == Quartz.TriggerState.Complete) continue;
 
-                var startTime = CalculateStartTime(useBootTime, interval);
-
+                var startTime = CalculateStartTime(useBootTime, interval, logger);
                 var remainingCount = CalculateRemainingCount(simpleTrigger.RepeatCount, simpleTrigger.TimesTriggered);
 
                 var newTrigger = TriggerBuilder.Create()
@@ -496,8 +518,6 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
                 if (useBootTime)
                 {
-                    // 开机时间模式：将 previousFireTime 对齐到开机时间网格（startTime - interval），
-                    // 避免旧的非网格对齐值导致 Quartz 计算 nextFireTime 偏离网格
                     SetBootTimePreviousFireTime(newTrigger, startTime, interval);
                 }
                 else
@@ -505,11 +525,7 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                     PreservePreviousFireTime(trigger, newTrigger);
                 }
 
-                await scheduler.RescheduleJob(trigger.Key, newTrigger, ct);
-
-                // 注：触发器的暂停/恢复由调用方（App.axaml.cs）统一通过
-                // PauseAll() / ResumeAll() 管理，此处无需单独处理
-
+                await scheduler.RescheduleJob(trigger.Key, newTrigger, ct).ConfigureAwait(false);
                 count++;
                 logger.LogInformation(
                     "重新调度 SimpleTrigger {TriggerKey}，UseBootTime={UseBootTime}，Interval={Interval}，StartTime={StartTime}",
@@ -548,18 +564,17 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
     /// <inheritdoc />
     public async Task TriggerAllStartupTasksAsync(CancellationToken ct = default)
     {
-        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct);
+        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), ct).ConfigureAwait(false);
         var count = 0;
 
         foreach (var jobKey in jobKeys)
         {
-            var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+            var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
             if (jobDetail == null) continue;
 
             if (!IsRunOnStartup(jobDetail))
                 continue;
 
-            // 跳过已暂停的开机启动任务
             if (jobDetail.JobDataMap.TryGetValue("IsPaused", out var pausedVal)
                 && bool.TryParse(pausedVal?.ToString(), out var paused) && paused)
             {
@@ -567,7 +582,7 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                 continue;
             }
 
-            await scheduler.TriggerJob(jobKey, ct);
+            await scheduler.TriggerJob(jobKey, ct).ConfigureAwait(false);
             count++;
             logger.LogInformation("触发开机启动任务 {JobKey}", jobKey);
         }
@@ -577,16 +592,15 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
     private async Task<ScheduledTaskDetail?> GetTaskDetailAsync(JobKey jobKey, CancellationToken ct)
     {
-        var jobDetail = await scheduler.GetJobDetail(jobKey, ct);
+        var jobDetail = await scheduler.GetJobDetail(jobKey, ct).ConfigureAwait(false);
         if (jobDetail == null)
         {
             return null;
         }
 
-        var triggers = await scheduler.GetTriggersOfJob(jobKey, ct);
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, ct).ConfigureAwait(false);
         var triggerInfos = new List<TriggerInfo>();
 
-        // 从 JobDataMap 提取 RunOnStartup 标志
         var runOnStartup = IsRunOnStartup(jobDetail);
 
         var expectedTriggerName = GetTriggerName(jobKey.Name);
@@ -595,15 +609,13 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             if (trigger.Key.Name != expectedTriggerName)
                 continue;
 
-            var triggerInfo = await MapToTriggerInfoAsync(trigger, runOnStartup, ct);
+            var triggerInfo = await MapToTriggerInfoAsync(trigger, runOnStartup, ct).ConfigureAwait(false);
             if (triggerInfo != null)
             {
                 triggerInfos.Add(triggerInfo);
             }
         }
 
-        // OnStartup 任务可能没有触发器，或触发器状态为 Complete（已触发），
-        // 为 UI 展示创建一个合成 TriggerInfo，确保仪表盘正确统计
         if (runOnStartup && (triggerInfos.Count == 0 || triggerInfos.All(t => t.State != Models.TriggerState.Normal)))
         {
             var isPaused = jobDetail.JobDataMap.TryGetValue("IsPaused", out var pausedVal)
@@ -629,7 +641,6 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             Triggers = triggerInfos
         };
 
-        // 从 JobDataMap 提取业务字段（兼容新的 Command 和旧的 Commands 键）
         if (jobDetail.JobDataMap.TryGetValue("Command", out var commandVal))
         {
             result.CommandJson = commandVal?.ToString() ?? "{}";
@@ -645,7 +656,7 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
                 result.Priority = priority;
         }
 
-        if (jobDetail.JobDataMap.TryGetValue("UseBootTime", out var bootTimeVal))
+        if (jobDetail.JobDataMap.TryGetValue("UseBootTime", out _))
         {
             result.UseBootTime = jobDetail.JobDataMap.GetBooleanValue("UseBootTime");
         }
@@ -664,7 +675,6 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
             result.UpdatedAt = DateTime.SpecifyKind(updatedAt, DateTimeKind.Utc).ToLocalTime();
         }
 
-        // 旧任务的 JobData 中没有 CreatedAt/UpdatedAt，从触发器 StartTimeUtc 回退获取
         if (result.CreatedAt == null && triggers.Count > 0)
         {
             var startTimeUtc = triggers.Min(t => t.StartTimeUtc);
@@ -678,7 +688,7 @@ public class TaskSchedulerService(IScheduler scheduler, ILogger<TaskSchedulerSer
 
     private async Task<TriggerInfo?> MapToTriggerInfoAsync(ITrigger trigger, bool runOnStartup, CancellationToken ct)
     {
-        var state = await scheduler.GetTriggerState(trigger.Key, ct);
+        var state = await scheduler.GetTriggerState(trigger.Key, ct).ConfigureAwait(false);
 
         var triggerInfo = new TriggerInfo
         {

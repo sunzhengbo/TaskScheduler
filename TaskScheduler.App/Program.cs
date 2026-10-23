@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Avalonia;
+using TaskScheduler.Core.Services;
 
 namespace TaskScheduler.App;
 
@@ -14,24 +15,35 @@ internal abstract class Program
     private static Mutex? _mutex;
 
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
         IsApplicationStartup = true;
-        _mutex = new Mutex(false, "TaskScheduler-App-{3F7E9C15-2A8D-4E1B-9C6F-8D3A5B2E7F1C}");
-        if (!_mutex.WaitOne(0))
+        _mutex = new Mutex(false, SchedulerBootstrapService.SchedulerMutexName);
+        var acquired = false;
+        try
+        {
+            acquired = _mutex.WaitOne(0);
+        }
+        catch (AbandonedMutexException)
+        {
+            acquired = true;
+        }
+
+        if (!acquired)
         {
             _mutex.Dispose();
             _mutex = null;
-            return;
+            return 0;
         }
 
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            return 0;
         }
         finally
         {
-            _mutex.ReleaseMutex();
+            try { _mutex.ReleaseMutex(); } catch { }
             _mutex.Dispose();
             _mutex = null;
         }

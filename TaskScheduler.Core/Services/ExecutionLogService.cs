@@ -6,16 +6,16 @@ namespace TaskScheduler.Core.Services;
 /// <summary>
 /// 执行日志服务实现（基于 SQLite）
 /// </summary>
-public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
+public class ExecutionLogService(DatabaseProvider db, IIpcSyncService? ipcSyncService = null) : IExecutionLogService
 {
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     public async Task RecordExecutionAsync(ExecutionLog log, CancellationToken ct = default)
     {
-        await _writeLock.WaitAsync(ct);
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await using var pooled = await db.GetConnectionAsync(ct);
+            await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
             var conn = pooled.Connection;
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
@@ -33,22 +33,43 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
             cmd.Parameters.AddWithValue("@output", (object?)log.Output ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@error", (object?)log.Error ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@remark", (object?)log.Remark ?? DBNull.Value);
-            await cmd.ExecuteNonQueryAsync(ct);
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
         finally
         {
             _writeLock.Release();
         }
+
+        if (ipcSyncService != null)
+        {
+            await ipcSyncService.NotifyAsync(SyncEventType.LogsChanged, log.JobName, log.JobGroup, ct: ct).ConfigureAwait(false);
+        }
+    }
+
+    public async Task<ExecutionLog?> GetLogByIdAsync(int id, CancellationToken ct = default)
+    {
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
+        var conn = pooled.Connection;
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+                          SELECT id, job_name, job_group, start_time, end_time, duration_ms, exit_code, status, output, error, remark
+                          FROM execution_logs
+                          WHERE id = @id
+                          LIMIT 1
+                          """;
+        cmd.Parameters.AddWithValue("@id", id);
+        var logs = await ReadLogsAsync(cmd, ct).ConfigureAwait(false);
+        return logs.Count > 0 ? logs[0] : null;
     }
 
     public async Task<IReadOnlyList<ExecutionLog>> GetLogsAsync(string? jobName, string? jobGroup,
-        string? status, int page, int pageSize, CancellationToken ct = default)
+        string? status, int page, int pageSize, CancellationToken ct = default, string? searchKeyword = null)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
 
-        var where = BuildWhereClause(cmd, jobName, jobGroup, status);
+        var where = BuildWhereClause(cmd, jobName, jobGroup, status, searchKeyword);
         cmd.CommandText = $"""
 
                                        SELECT id, job_name, job_group, start_time, end_time, duration_ms, exit_code, status, output, error, remark
@@ -59,26 +80,26 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
         cmd.Parameters.AddWithValue("@limit", pageSize);
         cmd.Parameters.AddWithValue("@offset", (page - 1) * pageSize);
 
-        return await ReadLogsAsync(cmd, ct);
+        return await ReadLogsAsync(cmd, ct).ConfigureAwait(false);
     }
 
     public async Task<int> GetLogCountAsync(string? jobName, string? jobGroup,
-        string? status, CancellationToken ct = default)
+        string? status, CancellationToken ct = default, string? searchKeyword = null)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
 
-        var where = BuildWhereClause(cmd, jobName, jobGroup, status);
+        var where = BuildWhereClause(cmd, jobName, jobGroup, status, searchKeyword);
         cmd.CommandText = $"SELECT COUNT(*) FROM execution_logs {where}";
-        var result = await cmd.ExecuteScalarAsync(ct);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return Convert.ToInt32(result);
     }
 
     public async Task<TaskStatistics> GetStatisticsAsync(string jobName, string jobGroup,
         CancellationToken ct = default)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
 
         var stats = new TaskStatistics { JobName = jobName, JobGroup = jobGroup };
@@ -89,8 +110,8 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
             cmd.CommandText = """
 
                                               SELECT COUNT(*) AS total,
-                                                     SUM(CASE WHEN status='Success' THEN 1 ELSE 0 END) AS success,
-                                                     SUM(CASE WHEN status='Failed' THEN 1 ELSE 0 END) AS fail,
+                                                     COALESCE(SUM(CASE WHEN status='Success' THEN 1 ELSE 0 END), 0) AS success,
+                                                     COALESCE(SUM(CASE WHEN status='Failed' THEN 1 ELSE 0 END), 0) AS fail,
                                                      AVG(CASE WHEN duration_ms IS NOT NULL THEN duration_ms END) AS avg_dur
                                               FROM execution_logs
                                               WHERE job_name=@name AND job_group=@group
@@ -98,12 +119,12 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
             cmd.Parameters.AddWithValue("@name", jobName);
             cmd.Parameters.AddWithValue("@group", jobGroup);
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct))
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            if (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
                 stats.TotalExecutions = reader.GetInt32(0);
-                stats.SuccessCount = reader.GetInt32(1);
-                stats.FailCount = reader.GetInt32(2);
+                stats.SuccessCount = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+                stats.FailCount = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
                 stats.AverageDurationMs = reader.IsDBNull(3) ? 0 : Convert.ToInt64(reader.GetDouble(3));
             }
         }
@@ -121,8 +142,8 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
             cmd.Parameters.AddWithValue("@name", jobName);
             cmd.Parameters.AddWithValue("@group", jobGroup);
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct))
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            if (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
                 stats.LastExecutionTime = DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc).ToLocalTime();
                 stats.LastStatus = Enum.Parse<ExecutionStatus>(reader.GetString(1));
@@ -138,13 +159,14 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
                                               SELECT status FROM execution_logs
                                               WHERE job_name=@name AND job_group=@group
                                               ORDER BY start_time DESC
+                                              LIMIT 1000
                               """;
             cmd.Parameters.AddWithValue("@name", jobName);
             cmd.Parameters.AddWithValue("@group", jobGroup);
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             var consecutive = 0;
-            while (await reader.ReadAsync(ct))
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
                 if (reader.GetString(0) == "Failed")
                     consecutive++;
@@ -160,11 +182,9 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
 
     public async Task<DashboardStats> GetDashboardStatsAsync(CancellationToken ct = default)
     {
-        // DashboardStats 主要依赖 Quartz 调度器的任务状态
-        // 此方法返回基于日志的统计；完整统计在 ViewModel 层合并
         var stats = new DashboardStats();
 
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -176,8 +196,8 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
                                       FROM execution_logs
                           """;
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (await reader.ReadAsync(ct))
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             stats.TotalCount = reader.GetInt32(0);
             stats.FailedCount = reader.GetInt32(1);
@@ -188,7 +208,7 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
 
     public async Task<IReadOnlyList<ExecutionLog>> GetRecentLogsAsync(int count, CancellationToken ct = default)
     {
-        await using var pooled = await db.GetConnectionAsync(ct);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
         var conn = pooled.Connection;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -199,12 +219,12 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
                                       LIMIT @count
                           """;
         cmd.Parameters.AddWithValue("@count", count);
-        return await ReadLogsAsync(cmd, ct);
+        return await ReadLogsAsync(cmd, ct).ConfigureAwait(false);
     }
 
     #region Helpers
 
-    private static string BuildWhereClause(SqliteCommand cmd, string? jobName, string? jobGroup, string? status)
+    private static string BuildWhereClause(SqliteCommand cmd, string? jobName, string? jobGroup, string? status, string? searchKeyword = null)
     {
         var clauses = new List<string>();
         if (!string.IsNullOrWhiteSpace(jobName))
@@ -225,14 +245,20 @@ public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService
             cmd.Parameters.AddWithValue("@status", status);
         }
 
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            clauses.Add("(job_name LIKE @kw OR job_group LIKE @kw OR output LIKE @kw OR error LIKE @kw)");
+            cmd.Parameters.AddWithValue("@kw", $"%{searchKeyword.Trim()}%");
+        }
+
         return clauses.Count > 0 ? "WHERE " + string.Join(" AND ", clauses) : string.Empty;
     }
 
     private static async Task<IReadOnlyList<ExecutionLog>> ReadLogsAsync(SqliteCommand cmd, CancellationToken ct)
     {
         var logs = new List<ExecutionLog>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             logs.Add(new ExecutionLog
             {

@@ -47,6 +47,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Run unit & regression tests
+        shell: pwsh
+        run: dotnet test TaskScheduler.Tests/TaskScheduler.Tests.csproj -c Release
+
       - name: Set version info
         shell: pwsh
         run: |
@@ -60,25 +64,25 @@ jobs:
           "RELEASE_TIME=$releaseTime" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ARTIFACT_NAME=$artifactName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Update AboutViewModel
+      - name: Update AppMetadata
         shell: pwsh
         run: |
-          $viewModelPath = "TaskScheduler.App/ViewModels/AboutViewModel.cs"
-          if (Test-Path $viewModelPath) {
-              $lines = Get-Content -Path $viewModelPath
+          $metadataPath = "TaskScheduler.Core/Models/AppMetadata.cs"
+          if (Test-Path $metadataPath) {
+              $lines = Get-Content -Path $metadataPath
               for ($i = 0; $i -lt $lines.Count; $i++) {
                   $line = $lines[$i]
-                  if ($line -match '_version = "') {
-                      $lines[$i] = $line -replace '_version = "[^"]*"', "_version = `"$env:VERSION`""
+                  if ($line -match 'Version = "') {
+                      $lines[$i] = $line -replace 'Version = "[^"]*"', "Version = `"$env:VERSION`""
                   }
-                  if ($line -match '_releaseTime = "') {
-                      $lines[$i] = $line -replace '_releaseTime = "[^"]*"', "_releaseTime = `"$env:RELEASE_TIME`""
+                  if ($line -match 'ReleaseTime = "') {
+                      $lines[$i] = $line -replace 'ReleaseTime = "[^"]*"', "ReleaseTime = `"$env:RELEASE_TIME`""
                   }
               }
-              $lines | Set-Content -Path $viewModelPath
+              $lines | Set-Content -Path $metadataPath
           }
 
-      - name: Publish application
+      - name: Publish application & CLI
         shell: pwsh
         run: |
           dotnet publish TaskScheduler.App/TaskScheduler.App.csproj `
@@ -114,11 +118,14 @@ jobs:
         if: matrix.os != 'windows-latest'
         shell: bash
         run: |
+          # 确保 GUI 与 CLI 二进制均具备可执行权限
+          chmod +x "publish/${{ matrix.rid }}/TaskScheduler.App" 2>/dev/null || true
+          chmod +x "publish/${{ matrix.rid }}/tscli" 2>/dev/null || true
           tar -czf "$ARTIFACT_NAME" -C "publish/${{ matrix.rid }}" .
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', env.VERSION) }}
-          name: TaskScheduler v${{ env.VERSION }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', env.VERSION) }}
           files: ${{ env.ARTIFACT_NAME }}

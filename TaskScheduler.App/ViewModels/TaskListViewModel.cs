@@ -19,7 +19,6 @@ using Microsoft.Extensions.Logging;
 using Ursa.Controls;
 using Avalonia.Controls.Notifications;
 
-using TaskScheduler.App.Models;
 using TaskScheduler.App.Services;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
@@ -343,7 +342,7 @@ public partial class TaskListViewModel : ViewModelBase, IParameterReceiver
 
         if (file != null)
         {
-            await File.WriteAllTextAsync(file.Path.LocalPath, json, Encoding.UTF8);
+            await File.WriteAllTextAsync(file.Path.LocalPath, json, new UTF8Encoding(false));
         }
     }
 

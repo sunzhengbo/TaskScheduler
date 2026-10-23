@@ -1,22 +1,23 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Styling;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
-using Quartz.Impl.Matchers;
 using TaskScheduler.App.Models;
 using TaskScheduler.App.Services;
 using TaskScheduler.App.ViewModels;
 using TaskScheduler.App.Views;
 using TaskScheduler.Core;
+using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
 
 namespace TaskScheduler.App;
@@ -66,16 +67,83 @@ public class App : Application
         // 创建托盘图标，注册时不会创建对象，只有调用时才会创建对象，所以在此调用
         serviceProvider.GetRequiredService<TrayIconService>();
 
+        // 启动跨进程 IPC 同步监听服务（接收外部 CLI 命令行的变更通知并自动刷新 UI 与调度器）
+        var ipcSyncService = serviceProvider.GetRequiredService<IIpcSyncService>();
+        ipcSyncService.MessageReceived += msg => HandleSyncMessage(serviceProvider, msg);
+        ipcSyncService.StartServer();
+
         // 手动启动 Quartz Scheduler（此时 QRTZ_* 表已就绪）
         var schedulerFactory = serviceProvider.GetRequiredService<ISchedulerFactory>();
         StartSchedulerAsync(serviceProvider, schedulerFactory);
 
         var mainWindow = SetupMainWindow(serviceProvider);
-        RegisterShutdownHandler(serviceProvider, mainWindow, schedulerFactory);
+        RegisterShutdownHandler(serviceProvider, mainWindow, schedulerFactory, ipcSyncService);
         LogStartupInfo(serviceProvider);
         ApplyTheme(serviceProvider);
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// 处理来自外部 CLI 进程或后台作业的状态变更通知，在 UI 线程实时刷新当前视图与主题。
+    /// </summary>
+    private static void HandleSyncMessage(IServiceProvider serviceProvider, SyncMessage msg)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                var navigation = serviceProvider.GetService<INavigationService>();
+                var currentPage = navigation?.CurrentPage;
+
+                if (msg.Type == SyncEventType.SettingsChanged)
+                {
+                    ApplyTheme(serviceProvider);
+                    if (currentPage is SettingsViewModel settingsVm)
+                    {
+                        settingsVm.LoadSettingsCommand.Execute(null);
+                    }
+                    return;
+                }
+
+                if (msg.Type == SyncEventType.ToolsChanged)
+                {
+                    if (currentPage is SettingsViewModel settingsVm)
+                    {
+                        settingsVm.LoadSettingsCommand.Execute(null);
+                    }
+                    else if (currentPage is TaskEditorViewModel editorVm)
+                    {
+                        _ = editorVm.ReloadToolsAsync();
+                    }
+                    return;
+                }
+
+                if (msg.Type is SyncEventType.TasksChanged or SyncEventType.LogsChanged or SyncEventType.TriggerJobNow)
+                {
+                    switch (currentPage)
+                    {
+                        case DashboardViewModel dashboardVm:
+                            dashboardVm.LoadDataCommand.Execute(null);
+                            break;
+                        case TaskListViewModel taskListVm:
+                            taskListVm.LoadTasksCommand.Execute(null);
+                            break;
+                        case ExecutionLogViewModel logVm:
+                            logVm.LoadLogsCommand.Execute(null);
+                            break;
+                        case TaskDetailViewModel { CurrentTask: not null } detailVm:
+                            detailVm.OnParameterReceived((detailVm.CurrentTask.Name, detailVm.CurrentTask.Group));
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                serviceProvider.GetService<ILoggerFactory>()?.CreateLogger<App>()
+                    .LogWarning(ex, "处理跨进程 UI 实时刷新失败: {Type}", msg.Type);
+            }
+        });
     }
 
     /// <summary>
@@ -88,19 +156,10 @@ public class App : Application
         {
             try
             {
-                var scheduler = await schedulerFactory.GetScheduler();
-                var originallyPausedKeys = await RecordPausedTriggersAsync(scheduler, schedulerLogger);
-                await RescheduleSimpleTriggersAsync(serviceProvider, schedulerLogger);
-                await RestorePausedTriggersAsync(scheduler, originallyPausedKeys, schedulerLogger);
-
-                // 阶段2：启动调度器（此时所有触发器已重调度完毕，不会 misfire）
-                await scheduler.Start();
-                schedulerLogger.LogInformation("Quartz Scheduler started");
-
-                // 阶段3：调度器启动后，仅真实应用入口触发开机启动任务
-                if (Program.IsApplicationStartup)
-                    await TriggerStartupTasksAsync(serviceProvider);
-
+                await SchedulerBootstrapService.StartSchedulerCoreAsync(
+                    serviceProvider,
+                    schedulerFactory,
+                    triggerStartupTasks: Program.IsApplicationStartup);
                 SchedulerReady.TrySetResult(true);
             }
             catch (Exception ex)
@@ -109,125 +168,6 @@ public class App : Application
                 SchedulerReady.TrySetException(ex);
             }
         });
-    }
-
-    /// <summary>
-    /// 在 Scheduler 启动前记录用户原本暂停的触发器，用于重调度后恢复暂停状态。
-    /// </summary>
-    private static async Task<HashSet<TriggerKey>> RecordPausedTriggersAsync(
-        IScheduler scheduler, ILogger logger)
-    {
-        var pausedKeys = new HashSet<TriggerKey>();
-        try
-        {
-            var allJobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup());
-            foreach (var jk in allJobKeys)
-            {
-                var triggers = await scheduler.GetTriggersOfJob(jk);
-                foreach (var t in triggers)
-                {
-                    try
-                    {
-                        var state = await scheduler.GetTriggerState(t.Key);
-                        if (state == TriggerState.Paused)
-                            pausedKeys.Add(t.Key);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex, "获取触发器 {TriggerKey} 状态失败", t.Key);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "获取作业键列表失败");
-        }
-
-        return pausedKeys;
-    }
-
-    /// <summary>
-    /// 根据设置重新计算所有 SimpleTrigger 的起始时间。
-    /// </summary>
-    private static async Task RescheduleSimpleTriggersAsync(
-        IServiceProvider serviceProvider, ILogger logger)
-    {
-        try
-        {
-            var settingsService = serviceProvider.GetService<ISettingsService>();
-            if (settingsService != null)
-            {
-                var engineJson = await settingsService.GetValueAsync("engine_settings");
-                var engine = EngineSettings.FromJson(engineJson);
-                if (engine.RescheduleOnStartup)
-                {
-                    var taskService = serviceProvider.GetService<ITaskSchedulerService>();
-                    if (taskService != null)
-                    {
-                        await taskService.RescheduleAllSimpleTriggersAsync();
-                    }
-                    else
-                    {
-                        logger.LogWarning("ITaskSchedulerService 未注册，跳过 SimpleTrigger 重调度");
-                    }
-                }
-                else
-                {
-                    logger.LogInformation("启动时重新调度已关闭，跳过 SimpleTrigger 重调度");
-                }
-            }
-            else
-            {
-                logger.LogWarning("ISettingsService 未注册，跳过 SimpleTrigger 重调度");
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "启动时重新调度 SimpleTrigger 失败");
-        }
-    }
-
-    /// <summary>
-    /// 重新暂停用户原本就暂停的触发器（重调度可能改变了触发器状态）。
-    /// </summary>
-    private static async Task RestorePausedTriggersAsync(
-        IScheduler scheduler, HashSet<TriggerKey> originallyPausedKeys, ILogger logger)
-    {
-        foreach (var triggerKey in originallyPausedKeys)
-        {
-            try
-            {
-                await scheduler.PauseTrigger(triggerKey);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "恢复暂停触发器 {TriggerKey} 失败", triggerKey);
-            }
-        }
-
-        if (originallyPausedKeys.Count > 0)
-            logger.LogInformation("已重新暂停 {Count} 个用户暂停的触发器", originallyPausedKeys.Count);
-    }
-
-    /// <summary>
-    /// 调度器启动后，手动触发所有开机启动任务。
-    /// </summary>
-    private static async Task TriggerStartupTasksAsync(IServiceProvider serviceProvider)
-    {
-        try
-        {
-            var taskService = serviceProvider.GetService<ITaskSchedulerService>();
-            if (taskService != null)
-            {
-                await taskService.TriggerAllStartupTasksAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger("SchedulerInit");
-            logger?.LogWarning(ex, "触发开机启动任务失败");
-        }
     }
 
     /// <summary>
@@ -273,7 +213,10 @@ public class App : Application
     /// 注册应用关闭时的清理逻辑：关闭 Scheduler、释放托盘图标、释放 DI 容器、关闭日志。
     /// </summary>
     private void RegisterShutdownHandler(
-        IServiceProvider serviceProvider, MainWindow mainWindow, ISchedulerFactory schedulerFactory)
+        IServiceProvider serviceProvider,
+        MainWindow mainWindow,
+        ISchedulerFactory schedulerFactory,
+        IIpcSyncService ipcSyncService)
     {
         if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime)
             return;
@@ -285,6 +228,16 @@ public class App : Application
                 {
                     var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
                     var logger = loggerFactory?.CreateLogger<App>();
+
+                    // 0. 停止 IPC 监听服务
+                    try
+                    {
+                        ipcSyncService.Dispose();
+                    }
+                    catch
+                    {
+                        // 忽略
+                    }
 
                     // 1. 标记 MainWindow 允许真正关闭
                     mainWindow.SetShuttingDown();

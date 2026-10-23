@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.Sqlite;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TaskScheduler.Core.Services;
@@ -30,7 +30,19 @@ public static class ServiceProviderExtensions
         {
             using var connection = new SqliteConnection(connectionString);
             connection.Open();
-            using var command = new SqliteCommand(sqlText, connection);
+
+            // 启用 WAL 模式以支持桌面端 App 与 CLI 并发读写访问，并迁移历史 JobType 名称
+            var initAndMigrateSql = $"""
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA busy_timeout = 5000;
+                {sqlText}
+                UPDATE QRTZ_JOB_DETAILS
+                SET JOB_CLASS_NAME = 'TaskScheduler.Core.Jobs.CommandJob, TaskScheduler.Core'
+                WHERE JOB_CLASS_NAME LIKE 'TaskScheduler.App.Jobs.CommandJob%';
+                """;
+
+            using var command = new SqliteCommand(initAndMigrateSql, connection);
             command.ExecuteNonQuery();
         }
         catch (SqliteException ex)

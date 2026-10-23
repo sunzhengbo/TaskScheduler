@@ -2,6 +2,7 @@
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>$(TargetFramework)</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
         <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -50,9 +51,41 @@
       <None Update="appsettings.Development.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
+      <None Include="..\README.md">
+        <Link>README.md</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      </None>
+      <None Include="..\README.zh-CN.md">
+        <Link>README.zh-CN.md</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      </None>
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\TaskScheduler.Core\TaskScheduler.Core.csproj" />
+      <ProjectReference Include="..\TaskScheduler.Cli\TaskScheduler.Cli.csproj" />
     </ItemGroup>
+
+    <!-- 编译和发布 TaskScheduler.App 时，自动将 tscli 可执行入口与运行时配置同步到同一目录，共享同一个 appsettings.json 与依赖库 -->
+    <Target Name="CopyCliHostToOutput" AfterTargets="Build">
+      <PropertyGroup>
+        <_CliOutDir Condition="'$(RuntimeIdentifier)' != '' And Exists('..\TaskScheduler.Cli\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\')">..\TaskScheduler.Cli\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\</_CliOutDir>
+        <_CliOutDir Condition="'$(_CliOutDir)' == ''">..\TaskScheduler.Cli\bin\$(Configuration)\$(TargetFramework)\</_CliOutDir>
+      </PropertyGroup>
+      <ItemGroup>
+        <_CliHostFiles Include="$(_CliOutDir)tscli.*" />
+      </ItemGroup>
+      <Copy SourceFiles="@(_CliHostFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    </Target>
+
+    <Target Name="PublishCliHost" AfterTargets="Publish">
+      <PropertyGroup>
+        <_AbsolutePublishDir>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_AbsolutePublishDir>
+      </PropertyGroup>
+      <MSBuild Projects="..\TaskScheduler.Cli\TaskScheduler.Cli.csproj"
+               Targets="Publish"
+               Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=$(SelfContained);PublishSingleFile=$(PublishSingleFile);PublishDir=$(_AbsolutePublishDir)" />
+    </Target>
 </Project>

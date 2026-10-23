@@ -45,10 +45,10 @@ public partial class ExecutionLogViewModel(
         try
         {
             var status = SelectedFilter == "全部" ? null : SelectedFilter;
-            var logs = await logService.GetLogsAsync(null, null, status, CurrentPage, 50);
+            var logs = await logService.GetLogsAsync(null, null, status, CurrentPage, 50, searchKeyword: SearchText);
             LogEntries = new AvaloniaList<ExecutionLog>(logs);
 
-            var count = await logService.GetLogCountAsync(null, null, status);
+            var count = await logService.GetLogCountAsync(null, null, status, searchKeyword: SearchText);
             TotalPages = Math.Max(1, (int)Math.Ceiling((double)count / 50));
         }
         catch (Exception ex)
@@ -155,7 +155,7 @@ public partial class ExecutionLogViewModel(
         });
 
         if (file != null)
-            await File.WriteAllTextAsync(file.Path.LocalPath, string.Join("\n", TerminalLines), Encoding.UTF8);
+            await File.WriteAllTextAsync(file.Path.LocalPath, string.Join("\n", TerminalLines), new UTF8Encoding(false));
     }
 
     private static TopLevel? GetTopLevel()

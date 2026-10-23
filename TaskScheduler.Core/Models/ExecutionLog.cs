@@ -52,4 +52,33 @@ public class ExecutionLog
             return $"{ts.Milliseconds}ms";
         }
     }
+
+    /// <summary>
+    /// 格式化为终端输出行列表（供 UI 与 CLI 导出/展示共用）
+    /// </summary>
+    public List<string> FormatTerminalLines()
+    {
+        var lines = new List<string>
+        {
+            $"任务: {JobName} ({JobGroup})",
+            $"状态: {Status}",
+            $"开始: {StartTime:yyyy-MM-dd HH:mm:ss}",
+            $"耗时: {DurationDisplay}",
+            $"退出码: {ExitCode?.ToString() ?? "—"}",
+            ""
+        };
+        if (!string.IsNullOrEmpty(Output))
+        {
+            lines.Add("=== 标准输出 ===");
+            lines.Add(Output);
+        }
+
+        if (!string.IsNullOrEmpty(Error))
+        {
+            lines.Add("=== 错误输出 ===");
+            lines.Add(Error);
+        }
+
+        return lines;
+    }
 }

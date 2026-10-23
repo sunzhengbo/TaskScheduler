@@ -18,9 +18,8 @@ using CommunityToolkit.Mvvm.Input;
 
 using Microsoft.Extensions.Logging;
 
-using TaskScheduler.App.Jobs;
-using TaskScheduler.App.Models;
 using TaskScheduler.App.Services;
+using TaskScheduler.Core.Jobs;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
 
@@ -155,6 +154,11 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     }
 
     /// <summary>
+    /// 重新加载解释器工具配置列表（供跨进程工具配置变更同步调用）。
+    /// </summary>
+    public Task ReloadToolsAsync() => LoadToolsAsync();
+
+    /// <summary>
     /// 从 ToolConfigService 加载工具配置，动态构建可用的命令类型和解释器版本列表。
     /// </summary>
     private async Task LoadToolsAsync()
@@ -200,12 +204,12 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     /// </summary>
     private void UpdateInterpreterVersions()
     {
-        var toolType = MapCommandTypeToToolType(Command.Type);
+        var toolType = CommandTypes.MapToToolType(Command.Type);
         if (toolType == null)
         {
             // 内置类型（Cmd、VBScript）无 ToolConfig，自动检测系统解释器路径
             AvailableInterpreterVersions = [];
-            BuiltInInterpreterPath = DetectBuiltInInterpreterPath(Command.Type);
+            BuiltInInterpreterPath = CommandTypes.DetectBuiltInInterpreterPath(Command.Type);
             return;
         }
 
@@ -220,59 +224,6 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         if (versions.Count == 0 || Command.InterpreterVersion == null || !versions.Contains(Command.InterpreterVersion))
             Command.InterpreterVersion = versions.Count > 0 ? versions[0] : null;
     }
-
-    /// <summary>
-    /// 为内置命令类型（Cmd、VBScript）自动检测系统解释器的可执行文件路径。
-    /// </summary>
-    private static string? DetectBuiltInInterpreterPath(string commandType)
-    {
-        var exeName = commandType switch
-        {
-            CommandTypes.Cmd => "cmd.exe",
-            CommandTypes.VBScript => "cscript.exe",
-            _ => null
-        };
-        if (exeName == null) return null;
-
-        // 优先从 PATH 环境变量中查找
-        var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-            .Split(Path.PathSeparator);
-        foreach (var dir in pathDirs)
-        {
-            var trimmed = dir.Trim();
-            if (string.IsNullOrWhiteSpace(trimmed))
-                continue;
-            try
-            {
-                var fullPath = Path.Combine(trimmed, exeName);
-                if (File.Exists(fullPath))
-                    return fullPath;
-            }
-            catch (IOException)
-            {
-                // 跳过无效的 PATH 条目
-            }
-        }
-
-        // 回退到系统目录
-        if (OperatingSystem.IsWindows())
-        {
-            var systemPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), exeName);
-            if (File.Exists(systemPath))
-                return systemPath;
-        }
-
-        return null;
-    }
-
-    private static string? MapCommandTypeToToolType(string commandType) => commandType switch
-    {
-        CommandTypes.Python or "Python 脚本" => "Python",
-        CommandTypes.PowerShell or "PowerShell" => "PowerShell",
-        CommandTypes.NodeJs or "Node.js 脚本" => "Node.js",
-        CommandTypes.Shell or "Shell 脚本" or "Shell" => "Bash",
-        _ => null // Cmd、VBScript 等内置类型无对应 ToolConfig
-    };
 
     public void OnParameterReceived(object parameter)
     {

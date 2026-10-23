@@ -10,6 +10,9 @@ public interface IToolConfigService
     /// <summary>获取所有工具配置</summary>
     Task<IReadOnlyList<ToolConfig>> GetAllToolsAsync(CancellationToken ct = default);
 
+    /// <summary>根据 ID 获取工具配置</summary>
+    Task<ToolConfig?> GetToolByIdAsync(int id, CancellationToken ct = default);
+
     /// <summary>按类型获取工具配置</summary>
     Task<IReadOnlyList<ToolConfig>> GetToolsByTypeAsync(string toolType, CancellationToken ct = default);
 

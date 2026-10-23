@@ -4,23 +4,38 @@ This document contains guidelines for agentic coding agents working in the TaskS
 
 ## Project Overview
 
-TaskScheduler is a .NET 10.0 Avalonia desktop application using Quartz.NET for scheduling. Solution follows clean architecture with three projects:
+TaskScheduler is a .NET 10.0 desktop & CLI task scheduling solution using Quartz.NET for scheduling with SQLite persistence. Solution follows clean architecture with the following projects:
 
-- **TaskScheduler.App**: Avalonia UI desktop application (WinExe)
-- **TaskScheduler.Core**: Core business logic with Quartz.NET integration
+- **TaskScheduler.App**: Desktop GUI application (Avalonia UI, `OutputType=WinExe` — pure GUI for humans, zero console flash)
+- **TaskScheduler.Cli**: Command-line interface application (`tscli`, Spectre.Console.Cli, `OutputType=Exe` — pure CLI for AI & scripts, automatically copied into `TaskScheduler.App`'s output/publish directory and sharing the same `appsettings.json`)
+- **TaskScheduler.Core**: Core business logic with Quartz.NET integration, cross-process Named Pipe IPC sync, shared jobs, models and services
 - **TaskScheduler.Infra**: Infrastructure helpers and utilities
+
+## CLI 与 UI 功能对等与共生原则 (CLI-UI Feature Parity & Coexistence Principle)
+
+> [!IMPORTANT]
+> **凡是界面（UI）有的功能，在 CLI 都有对应的实现；且 CLI（`tscli`）与 GUI（`TaskScheduler.App`）同目录共生、共享同一个 `appsettings.json` 与同一个 SQLite 数据库，并通过 Named Pipe 实时同步状态。**
+> 
+> 任何开发者或 Agent 在进行功能开发、迭代或重构时，必须严格遵守双端功能对等与共生规范：
+> 1. **双入口同目录共生（GUI 给人用，CLI 给 AI 用）**：`TaskScheduler.App` 采用纯净 `WinExe`（双击无黑框），`TaskScheduler.Cli`（`tscli`）采用纯净 `Exe`（标准 `stdout`/`stderr` 流与退出码，专为 AI Agent 与终端脚本设计）。编译或发布 `TaskScheduler.App` 时，会自动将 `tscli.exe` 输出到同一目录并共享同一个 `appsettings.json`。
+> 2. **全功能覆盖**：UI 界面包含的全部功能（仪表盘概览统计、任务管理 CRUD、立即执行、暂停/恢复、测试运行、导入/导出/复制、执行日志分页查询与详情导出、解释器工具环境管理、引擎与系统设置、无头常驻调度等），在 CLI 中必须具备完全对应的命令与参数支持。
+> 3. **同时运行与实时同步**：GUI 运行期间允许在终端随时执行 `tscli` 命令（不被单实例 Mutex 拦截），并通过 `IIpcSyncService`（Named Pipe）在 CLI 修改任务、配置、工具或触发执行时，自动唤醒后台 Quartz 调度器并实时刷新已打开的 GUI 视图与主题。
+> 4. **通用逻辑下沉共享**：UI 与 CLI 共享底层的业务核心。通用逻辑（包括命令执行器 `ICommandExecutor`、作业定义 `CommandJob`、跨进程同步 `IIpcSyncService`、数据模型 `CommandModel`/`TaskExportModel`/`EngineSettings` 等）统一收敛在 `TaskScheduler.Core` 或 `TaskScheduler.Infra`。
+> 5. **同步维护与演进**：当 UI 界面新增或变更功能特性时，必须同步在 CLI 中提供对应命令；反之新增 CLI 业务能力时，UI 也应具备对应交互。
+> 6. **详细设计参考**：完整的 UI-CLI 功能映射矩阵、技术选型与架构细节参见 [`docs/cli-implementation-plan.md`](docs/cli-implementation-plan.md)。
 
 ## Build Commands
 
 ```bash
-# Build entire solution
+# Build entire solution (automatically outputs both TaskScheduler.App.exe and tscli.exe to TaskScheduler.App's bin directory)
 dotnet build TaskScheduler.slnx
 
-# Build specific project
-dotnet build TaskScheduler.App/TaskScheduler.App.csproj
-
-# Run application
+# Run GUI application
 dotnet run --project TaskScheduler.App
+
+# Run CLI application
+dotnet run --project TaskScheduler.Cli -- --help
+dotnet run --project TaskScheduler.Cli -- dashboard
 
 # Clean and restore
 dotnet clean TaskScheduler.slnx && dotnet restore TaskScheduler.slnx
@@ -61,7 +76,7 @@ dotnet test --collect:"XPlat Code Coverage"
 - Local variables: camelCase (`localVariable`)
 
 ### File Organization
-- Namespaces match folder structure (`TaskScheduler.Desktop.ViewModels`)
+- Namespaces match folder structure (`TaskScheduler.Desktop.ViewModels`, `TaskScheduler.Cli.Commands`)
 - File names match class names exactly
 - Using order: System → Third-party → Local namespaces
 
@@ -94,6 +109,12 @@ using TaskScheduler.Infra.Helpers;
 - Use `[RelayCommand]` for commands
 - Use `partial` class for ViewModels with generated commands
 
+### CLI Patterns
+- Subcommand architecture (e.g., `task`, `log`, `config`, `tool`, `dashboard`, `daemon`)
+- Provide both human-friendly formatted table/card output and machine-readable `--json` output
+- Support interactive prompts when required parameters are omitted in interactive terminals
+- Handle standard exit codes (0 = Success, 1 = General Error, 2 = Invalid Arguments, etc.)
+
 ### Dependency Injection
 - Use Microsoft.Extensions.DependencyInjection
 - Register services in extension methods (`AddTaskScheduler()`)
@@ -112,7 +133,7 @@ using TaskScheduler.Infra.Helpers;
 
 ### Time Handling Convention
 - All `DateTime` values stored in the database are in **UTC**
-- UI display must show **local time** (converted from UTC)
+- UI and CLI display must show **local time** (converted from UTC)
 - When reading `DateTime` from SQLite, the returned value has `DateTimeKind.Unspecified`; explicitly mark it as UTC before converting:
   ```csharp
   DateTime.SpecifyKind(reader.GetDateTime(col), DateTimeKind.Utc).ToLocalTime()
@@ -129,15 +150,17 @@ using TaskScheduler.Infra.Helpers;
 
 ```
 TaskScheduler/
-├── TaskScheduler.App/  (Views, ViewModels, Services, Dialogs, Models)
-├── TaskScheduler.Core/ (Quartz.NET integration, services)
-├── TaskScheduler.Infra/ (PathHelper, DirectoryHelper, AssemblyHelper)
+├── TaskScheduler.App/   (Avalonia GUI: Views, ViewModels, Services, Dialogs, Models, appsettings.json)
+├── TaskScheduler.Cli/   (tscli CLI: Commands, Formatting, Infrastructure)
+├── TaskScheduler.Core/  (Quartz.NET integration, IPC sync, services, common jobs & models)
+├── TaskScheduler.Infra/ (PathHelper, DirectoryHelper, AssemblyHelper, StartupHelper, ClipboardHelper)
 └── TaskScheduler.slnx
 ```
 
 ## Key Technologies
 
 - **UI**: Avalonia UI with Semi.Avalonia theme
+- **CLI**: Spectre.Console / Spectre.Console.Cli (or System.CommandLine)
 - **MVVM**: CommunityToolkit.Mvvm
 - **Scheduling**: Quartz.NET with SQLite persistence
 - **DI**: Microsoft.Extensions.DependencyInjection

@@ -12,10 +12,10 @@ using CommunityToolkit.Mvvm.Input;
 
 using Microsoft.Extensions.Logging;
 
-using TaskScheduler.App.Models;
 using TaskScheduler.App.Services;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
+using TaskScheduler.Infra.Helpers;
 
 namespace TaskScheduler.App.ViewModels;
 

@@ -1,17 +1,10 @@
-using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
-
 using Microsoft.Extensions.Logging;
-
 using Quartz;
-
-using TaskScheduler.App.Models;
-using TaskScheduler.App.Services;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
 
-namespace TaskScheduler.App.Jobs;
+namespace TaskScheduler.Core.Jobs;
 
 [DisallowConcurrentExecution]
 public class CommandJob(
@@ -28,14 +21,25 @@ public class CommandJob(
         else if (jobData.TryGetValue("Commands", out var commandsVal))
             commandJson = commandsVal?.ToString();
 
-        if (string.IsNullOrEmpty(commandJson)) return;
-
-        var command = CommandModel.DeserializeFromJson(commandJson);
-        if (command == null) return;
-
         var jobName = context.JobDetail.Key.Name;
         var jobGroup = context.JobDetail.Key.Group;
         var startTime = DateTime.UtcNow;
+
+        if (string.IsNullOrEmpty(commandJson))
+        {
+            logger.LogWarning("作业 '{JobKey}' 未配置命令数据 (Command)，跳过执行", context.JobDetail.Key);
+            await RecordLogAsync(jobName, jobGroup, startTime, 0, null, ExecutionStatus.Failed, null, "未配置命令数据 (Command)").ConfigureAwait(false);
+            return;
+        }
+
+        var command = CommandModel.DeserializeFromJson(commandJson);
+        if (command == null)
+        {
+            logger.LogWarning("作业 '{JobKey}' 命令数据格式非法，反序列化失败: {Json}", context.JobDetail.Key, commandJson);
+            await RecordLogAsync(jobName, jobGroup, startTime, 0, null, ExecutionStatus.Failed, null, $"命令数据格式非法，反序列化失败: {commandJson}").ConfigureAwait(false);
+            return;
+        }
+
         var stopwatch = Stopwatch.StartNew();
         var overallStatus = ExecutionStatus.Success;
         int? lastExitCode = null;
@@ -44,7 +48,11 @@ public class CommandJob(
 
         try
         {
-            var result = await commandExecutor.ExecuteCommandAsync(command.Content, command.Type, command.InterpreterPath, context.CancellationToken);
+            var result = await commandExecutor.ExecuteCommandAsync(
+                command.Content,
+                command.Type,
+                command.InterpreterPath,
+                context.CancellationToken).ConfigureAwait(false);
             lastExitCode = result.ExitCode;
             logger.LogInformation("命令 '{CommandName}' 执行完成 (退出码: {ExitCode})", command.Name, result.ExitCode);
 
@@ -73,6 +81,27 @@ public class CommandJob(
 
         stopwatch.Stop();
 
+        await RecordLogAsync(
+            jobName,
+            jobGroup,
+            startTime,
+            stopwatch.ElapsedMilliseconds,
+            lastExitCode,
+            overallStatus,
+            output,
+            error).ConfigureAwait(false);
+    }
+
+    private async Task RecordLogAsync(
+        string jobName,
+        string jobGroup,
+        DateTime startTime,
+        long durationMs,
+        int? exitCode,
+        ExecutionStatus status,
+        string? output,
+        string? error)
+    {
         try
         {
             var log = new ExecutionLog
@@ -81,13 +110,13 @@ public class CommandJob(
                 JobGroup = jobGroup,
                 StartTime = startTime,
                 EndTime = DateTime.UtcNow,
-                DurationMs = stopwatch.ElapsedMilliseconds,
-                ExitCode = lastExitCode,
-                Status = overallStatus,
+                DurationMs = durationMs,
+                ExitCode = exitCode,
+                Status = status,
                 Output = !string.IsNullOrEmpty(output) ? output : null,
                 Error = !string.IsNullOrEmpty(error) ? error : null
             };
-            await executionLogService.RecordExecutionAsync(log);
+            await executionLogService.RecordExecutionAsync(log).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
