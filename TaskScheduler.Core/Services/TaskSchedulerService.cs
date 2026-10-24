@@ -12,7 +12,8 @@ namespace TaskScheduler.Core.Services;
 public class TaskSchedulerService(
     IScheduler scheduler,
     ILogger<TaskSchedulerService> logger,
-    IIpcSyncService? ipcSyncService = null) : ITaskSchedulerService
+    IIpcSyncService? ipcSyncService = null,
+    IExecutionLogService? executionLogService = null) : ITaskSchedulerService
 {
     /// <summary>
     /// 将标准 5 字段 Unix cron 表达式转换为 Quartz.NET 6 字段格式。
@@ -273,6 +274,27 @@ public class TaskSchedulerService(
             }
         }
 
+        if (executionLogService != null && tasks.Count > 0)
+        {
+            try
+            {
+                var latestLogs = await executionLogService.GetLatestLogsForAllTasksAsync(ct).ConfigureAwait(false);
+                foreach (var task in tasks)
+                {
+                    if (latestLogs.TryGetValue($"{task.Group}.{task.Name}", out var log))
+                    {
+                        task.LastExecutionStatus = log.Status;
+                        task.LastExecutionError = log.Error;
+                        task.LastExecutionDurationMs = log.DurationMs;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "批量获取任务最新执行记录失败");
+            }
+        }
+
         return tasks;
     }
 
@@ -289,6 +311,27 @@ public class TaskSchedulerService(
             if (task != null)
             {
                 tasks.Add(task);
+            }
+        }
+
+        if (executionLogService != null && tasks.Count > 0)
+        {
+            try
+            {
+                var latestLogs = await executionLogService.GetLatestLogsForAllTasksAsync(ct).ConfigureAwait(false);
+                foreach (var task in tasks)
+                {
+                    if (latestLogs.TryGetValue($"{task.Group}.{task.Name}", out var log))
+                    {
+                        task.LastExecutionStatus = log.Status;
+                        task.LastExecutionError = log.Error;
+                        task.LastExecutionDurationMs = log.DurationMs;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "批量获取任务最新执行记录失败");
             }
         }
 
@@ -682,6 +725,24 @@ public class TaskSchedulerService(
         }
 
         result.UpdatedAt ??= result.CreatedAt;
+
+        if (executionLogService != null)
+        {
+            try
+            {
+                var latestLog = await executionLogService.GetLatestLogAsync(jobDetail.Key.Name, jobDetail.Key.Group, ct).ConfigureAwait(false);
+                if (latestLog != null)
+                {
+                    result.LastExecutionStatus = latestLog.Status;
+                    result.LastExecutionError = latestLog.Error;
+                    result.LastExecutionDurationMs = latestLog.DurationMs;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "获取任务最新执行记录失败: {JobKey}", jobKey);
+            }
+        }
 
         return result;
     }

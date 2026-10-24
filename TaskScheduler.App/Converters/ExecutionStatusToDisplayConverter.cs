@@ -28,6 +28,11 @@ public class ExecutionStatusToDisplayConverter : IValueConverter
             };
         }
 
+        if (value == null)
+        {
+            return "未执行";
+        }
+
         return "未知";
     }
 

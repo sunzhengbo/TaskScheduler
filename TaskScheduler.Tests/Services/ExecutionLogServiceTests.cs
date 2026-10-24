@@ -186,4 +186,49 @@ public class ExecutionLogServiceTests
         Assert.That(dashboard.TotalCount, Is.GreaterThanOrEqualTo(1));
         Assert.That(dashboard.FailedCount, Is.GreaterThanOrEqualTo(1));
     }
+
+    [Test]
+    public async Task GetLatestLogsForAllTasksAsync_ReturnsLatestLogPerTask()
+    {
+        // 任务 A 的两次执行
+        await _logService.RecordExecutionAsync(new ExecutionLog
+        {
+            JobName = "TaskA",
+            JobGroup = "GRP1",
+            StartTime = DateTime.UtcNow.AddMinutes(-20),
+            Status = ExecutionStatus.Success,
+            DurationMs = 100
+        });
+        await _logService.RecordExecutionAsync(new ExecutionLog
+        {
+            JobName = "TaskA",
+            JobGroup = "GRP1",
+            StartTime = DateTime.UtcNow.AddMinutes(-10),
+            Status = ExecutionStatus.Failed,
+            Error = "TaskA error",
+            DurationMs = 200
+        });
+
+        // 任务 B 的一次执行
+        await _logService.RecordExecutionAsync(new ExecutionLog
+        {
+            JobName = "TaskB",
+            JobGroup = "GRP2",
+            StartTime = DateTime.UtcNow.AddMinutes(-5),
+            Status = ExecutionStatus.Success,
+            DurationMs = 300
+        });
+
+        var latestMap = await _logService.GetLatestLogsForAllTasksAsync();
+        Assert.That(latestMap, Does.ContainKey("GRP1.TaskA"));
+        Assert.That(latestMap, Does.ContainKey("GRP2.TaskB"));
+
+        Assert.That(latestMap["GRP1.TaskA"].Status, Is.EqualTo(ExecutionStatus.Failed));
+        Assert.That(latestMap["GRP1.TaskA"].Error, Is.EqualTo("TaskA error"));
+        Assert.That(latestMap["GRP2.TaskB"].Status, Is.EqualTo(ExecutionStatus.Success));
+
+        var singleLog = await _logService.GetLatestLogAsync("TaskA", "GRP1");
+        Assert.That(singleLog, Is.Not.Null);
+        Assert.That(singleLog!.Status, Is.EqualTo(ExecutionStatus.Failed));
+    }
 }

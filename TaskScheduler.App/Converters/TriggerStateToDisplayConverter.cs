@@ -23,7 +23,7 @@ public class TriggerStateToDisplayConverter : IValueConverter
                 TriggerState.Normal => "正常",
                 TriggerState.Paused => "已暂停",
                 TriggerState.Complete => "已完成",
-                TriggerState.Blocked => "已阻塞",
+                TriggerState.Blocked => "执行中",
                 TriggerState.Error => "异常",
                 TriggerState.None => "无",
                 _ => state.ToString()

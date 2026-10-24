@@ -71,6 +71,9 @@ public sealed class TaskListCommand(ITaskSchedulerService taskService) : AsyncCo
                 t.Priority,
                 t.IsEnabled,
                 PrimaryState = t.FirstTrigger?.State ?? TriggerState.None,
+                LastExecutionStatus = t.LastExecutionStatus?.ToString(),
+                t.LastExecutionDurationMs,
+                t.LastExecutionError,
                 ScheduleDisplay = t.FirstTrigger?.TriggerDisplay ?? "—",
                 t.UseBootTime,
                 RunOnStartup = t.FirstTrigger?.Type == TriggerType.OnStartup,
@@ -90,6 +93,7 @@ public sealed class TaskListCommand(ITaskSchedulerService taskService) : AsyncCo
             .AddColumn("任务名称")
             .AddColumn("分组")
             .AddColumn("状态")
+            .AddColumn("上次结果")
             .AddColumn("调度规则")
             .AddColumn("优先级")
             .AddColumn("下次执行时间")
@@ -98,17 +102,22 @@ public sealed class TaskListCommand(ITaskSchedulerService taskService) : AsyncCo
 
         if (resultList.Count == 0)
         {
-            table.AddRow("[grey]无匹配任务[/]", "—", "—", "—", "—", "—", "—", "—");
+            table.AddRow("[grey]无匹配任务[/]", "—", "—", "—", "—", "—", "—", "—", "—");
         }
         else
         {
             foreach (var task in resultList)
             {
                 var tr = task.FirstTrigger;
+                var lastResultMarkup = task.LastExecutionStatus.HasValue
+                    ? CliOutputFormatter.FormatExecutionStatusMarkup(task.LastExecutionStatus.Value)
+                    : "[grey]未执行[/]";
+
                 table.AddRow(
                     $"[bold]{Markup.Escape(task.Name)}[/]",
                     Markup.Escape(task.Group),
                     CliOutputFormatter.FormatTriggerStateMarkup(tr?.State ?? TriggerState.None),
+                    lastResultMarkup,
                     Markup.Escape(tr?.TriggerDisplay ?? "—"),
                     CliOutputFormatter.FormatPriorityMarkup(task.Priority),
                     CliOutputFormatter.FormatDateTimeOffset(tr?.NextFireTime),

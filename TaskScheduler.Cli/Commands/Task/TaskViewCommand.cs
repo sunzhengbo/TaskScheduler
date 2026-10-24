@@ -55,6 +55,9 @@ public sealed class TaskViewCommand(
                     task.Priority,
                     task.IsEnabled,
                     PrimaryState = tr?.State ?? TriggerState.None,
+                    LastExecutionStatus = task.LastExecutionStatus?.ToString(),
+                    task.LastExecutionDurationMs,
+                    task.LastExecutionError,
                     ScheduleDisplay = tr?.TriggerDisplay ?? "—",
                     task.UseBootTime,
                     RunOnStartup = tr?.Type == TriggerType.OnStartup,
@@ -78,6 +81,18 @@ public sealed class TaskViewCommand(
         metaGrid.AddRow("[grey]任务名称:[/]", $"[bold]{Markup.Escape(task.Name)}[/]");
         metaGrid.AddRow("[grey]所属分组:[/]", Markup.Escape(task.Group));
         metaGrid.AddRow("[grey]当前状态:[/]", CliOutputFormatter.FormatTriggerStateMarkup(tr?.State ?? TriggerState.None));
+
+        var lastResultMarkup = task.LastExecutionStatus.HasValue
+            ? CliOutputFormatter.FormatExecutionStatusMarkup(task.LastExecutionStatus.Value)
+            : "[grey]未执行[/]";
+        if (!string.IsNullOrWhiteSpace(task.LastExecutionError))
+        {
+            var firstLineError = task.LastExecutionError.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+            if (firstLineError.Length > 40) firstLineError = firstLineError[..37] + "...";
+            lastResultMarkup += $" [red]({Markup.Escape(firstLineError)})[/]";
+        }
+        metaGrid.AddRow("[grey]上次执行结果:[/]", lastResultMarkup);
+
         metaGrid.AddRow("[grey]优先级别:[/]", CliOutputFormatter.FormatPriorityMarkup(task.Priority));
         metaGrid.AddRow("[grey]调度规则:[/]", Markup.Escape(tr?.TriggerDisplay ?? "—"));
         metaGrid.AddRow("[grey]开机时间锚点:[/]", task.UseBootTime ? "是 (系统开机模式)" : "否 (应用启动模式)");

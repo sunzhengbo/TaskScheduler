@@ -46,6 +46,15 @@ public class ScheduledTaskDetail : TaskInfo
     /// <summary>是否为开机启动</summary>
     public bool UseBootTime { get; set; }
 
+    /// <summary>最近一次执行状态（Success, Failed 等；null 表示尚未执行过）</summary>
+    public ExecutionStatus? LastExecutionStatus { get; set; }
+
+    /// <summary>最近一次执行错误摘要（用于 ToolTip 与诊断展示）</summary>
+    public string? LastExecutionError { get; set; }
+
+    /// <summary>最近一次执行耗时（毫秒）</summary>
+    public long? LastExecutionDurationMs { get; set; }
+
     /// <summary>行是否选中（用于多选）</summary>
     public bool IsSelected { get; set; }
 

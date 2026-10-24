@@ -28,6 +28,11 @@ public class ExecutionStatusToBadgeStatusConverter : IValueConverter
             };
         }
 
+        if (value == null)
+        {
+            return "Muted";
+        }
+
         return "Normal";
     }
 

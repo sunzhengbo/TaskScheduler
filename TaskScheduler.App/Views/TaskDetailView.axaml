@@ -35,6 +35,10 @@
                             <controls:StatusBadge
                                 Text="{Binding CurrentTask.FirstTrigger.State, Converter={StaticResource TriggerStateToDisplay}}"
                                 Status="{Binding CurrentTask.FirstTrigger.State, Converter={StaticResource TriggerStateToBadgeStatus}}" />
+                            <controls:StatusBadge
+                                Text="{Binding CurrentTask.LastExecutionStatus, Converter={StaticResource ExecutionStatusToDisplay}}"
+                                Status="{Binding CurrentTask.LastExecutionStatus, Converter={StaticResource ExecutionStatusToBadgeStatus}}"
+                                ToolTip.Tip="{Binding CurrentTask.LastExecutionError}" />
                         </StackPanel>
                         <TextBlock Text="{Binding CurrentTask.Description}"
                                    FontSize="13" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"

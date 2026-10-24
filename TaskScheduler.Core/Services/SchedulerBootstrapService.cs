@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
 using Quartz.Impl.Matchers;
+using TaskScheduler.Core.Listeners;
 using TaskScheduler.Core.Models;
 using TriggerState = Quartz.TriggerState;
 
@@ -60,6 +61,9 @@ public static class SchedulerBootstrapService
         await RescheduleSimpleTriggersAsync(serviceProvider, schedulerLogger, ct).ConfigureAwait(false);
         await RestorePausedTriggersAsync(scheduler, originallyPausedKeys, schedulerLogger, ct).ConfigureAwait(false);
 
+        // 注册作业执行生命周期监听器（在调度器启动前挂载完毕，避免首批即刻任务触发时遗漏完成监听）
+        RegisterJobExecutionListener(serviceProvider, scheduler);
+
         // 阶段2：启动调度器（此时所有触发器已重调度完毕，不会 misfire）
         await scheduler.Start(ct).ConfigureAwait(false);
         schedulerLogger.LogInformation("Quartz Scheduler started");
@@ -68,6 +72,32 @@ public static class SchedulerBootstrapService
         if (triggerStartupTasks)
         {
             await TriggerStartupTasksAsync(serviceProvider, schedulerLogger, ct).ConfigureAwait(false);
+        }
+    }
+
+    private static void RegisterJobExecutionListener(IServiceProvider serviceProvider, IScheduler scheduler)
+    {
+        try
+        {
+            var ipcSyncService = serviceProvider.GetService<IIpcSyncService>();
+            if (ipcSyncService == null) return;
+
+            var logger = serviceProvider.GetRequiredService<ILoggerFactory>()
+                .CreateLogger<JobExecutionSyncListener>();
+
+            var exists = scheduler.ListenerManager.GetJobListeners()
+                .Any(l => string.Equals(l.Name, JobExecutionSyncListener.ListenerName, StringComparison.Ordinal));
+            if (!exists)
+            {
+                scheduler.ListenerManager.AddJobListener(
+                    new JobExecutionSyncListener(ipcSyncService, logger),
+                    GroupMatcher<JobKey>.AnyGroup());
+            }
+        }
+        catch (Exception ex)
+        {
+            serviceProvider.GetService<ILoggerFactory>()?.CreateLogger("SchedulerInit")
+                .LogWarning(ex, "注册作业生命周期监听器失败");
         }
     }
 

@@ -71,4 +71,18 @@ public class CliOutputFormatterTests
         Assert.That(CliOutputFormatter.FormatTimeAgo(fiveMinsAgoUtc), Is.EqualTo("5 分钟前"));
         Assert.That(CliOutputFormatter.FormatTimeAgo(fiveMinsAgoLocal), Is.EqualTo("5 分钟前"));
     }
+
+    [Test]
+    public void FormatTriggerStateMarkup_Blocked_OutputsRunningMarkup()
+    {
+        var markup = CliOutputFormatter.FormatTriggerStateMarkup(TriggerState.Blocked);
+        Assert.That(markup, Does.Contain("执行中 (Running)"));
+    }
+
+    [Test]
+    public void FormatTriggerStateMarkup_Normal_OutputsNormalMarkup()
+    {
+        var markup = CliOutputFormatter.FormatTriggerStateMarkup(TriggerState.Normal);
+        Assert.That(markup, Does.Contain("运行中 (Normal)").Or.Contain("正常 (Normal)"));
+    }
 }

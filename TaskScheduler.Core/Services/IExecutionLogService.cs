@@ -29,4 +29,10 @@ public interface IExecutionLogService
 
     /// <summary>获取最近 N 条日志</summary>
     Task<IReadOnlyList<ExecutionLog>> GetRecentLogsAsync(int count, CancellationToken ct = default);
+
+    /// <summary>获取所有任务各自最近一次的执行记录字典（Key 格式为 "jobGroup.jobName"）</summary>
+    Task<IReadOnlyDictionary<string, ExecutionLog>> GetLatestLogsForAllTasksAsync(CancellationToken ct = default);
+
+    /// <summary>获取指定任务最近一次的执行记录</summary>
+    Task<ExecutionLog?> GetLatestLogAsync(string jobName, string jobGroup, CancellationToken ct = default);
 }

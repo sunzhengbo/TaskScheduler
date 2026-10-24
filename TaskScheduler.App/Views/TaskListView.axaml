@@ -15,6 +15,8 @@
     <UserControl.Resources>
         <converters:TriggerStateToBadgeStatusConverter x:Key="TriggerStateToBadgeStatus" />
         <converters:TriggerStateToDisplayConverter x:Key="TriggerStateToDisplay" />
+        <converters:ExecutionStatusToBadgeStatusConverter x:Key="ExecutionStatusToBadgeStatus" />
+        <converters:ExecutionStatusToDisplayConverter x:Key="ExecutionStatusToDisplay" />
     </UserControl.Resources>
 
     <Grid RowDefinitions="Auto,*">
@@ -88,6 +90,13 @@
                             <TextBlock Text="导出" VerticalAlignment="Center" FontSize="12" />
                         </StackPanel>
                     </Button>
+                    <Button Classes="Flat" Padding="6"
+                            Command="{Binding LoadTasksCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                            <TextBlock Text="刷新" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -149,6 +158,19 @@
                                 <controls:StatusBadge
                                     Text="{Binding FirstTrigger.State, Converter={StaticResource TriggerStateToDisplay}}"
                                     Status="{Binding FirstTrigger.State, Converter={StaticResource TriggerStateToBadgeStatus}}"
+                                    VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 上次结果 -->
+                    <DataGridTemplateColumn Header="上次结果" Width="90">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ScheduledTaskDetail">
+                                <controls:StatusBadge
+                                    Text="{Binding LastExecutionStatus, Converter={StaticResource ExecutionStatusToDisplay}}"
+                                    Status="{Binding LastExecutionStatus, Converter={StaticResource ExecutionStatusToBadgeStatus}}"
+                                    ToolTip.Tip="{Binding LastExecutionError}"
                                     VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

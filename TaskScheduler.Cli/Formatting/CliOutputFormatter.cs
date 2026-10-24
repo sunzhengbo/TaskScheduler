@@ -60,7 +60,7 @@ public static class CliOutputFormatter
         TriggerState.Normal => "[green]运行中 (Normal)[/]",
         TriggerState.Paused => "[yellow]已暂停 (Paused)[/]",
         TriggerState.Complete => "[blue]已完成 (Complete)[/]",
-        TriggerState.Blocked => "[darkorange]阻塞中 (Blocked)[/]",
+        TriggerState.Blocked => "[cyan]执行中 (Running)[/]",
         TriggerState.Error => "[red]错误 (Error)[/]",
         _ => "[grey]无 (None)[/]"
     };

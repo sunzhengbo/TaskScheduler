@@ -222,6 +222,49 @@ public class ExecutionLogService(DatabaseProvider db, IIpcSyncService? ipcSyncSe
         return await ReadLogsAsync(cmd, ct).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyDictionary<string, ExecutionLog>> GetLatestLogsForAllTasksAsync(CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, ExecutionLog>(StringComparer.OrdinalIgnoreCase);
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
+        var conn = pooled.Connection;
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+                          SELECT e.id, e.job_name, e.job_group, e.start_time, e.end_time, e.duration_ms, e.exit_code, e.status, e.output, e.error, e.remark
+                          FROM execution_logs e
+                          INNER JOIN (
+                              SELECT MAX(id) AS max_id
+                              FROM execution_logs
+                              GROUP BY job_name, job_group
+                          ) m ON e.id = m.max_id
+                          """;
+
+        var logs = await ReadLogsAsync(cmd, ct).ConfigureAwait(false);
+        foreach (var log in logs)
+        {
+            result[$"{log.JobGroup}.{log.JobName}"] = log;
+        }
+
+        return result;
+    }
+
+    public async Task<ExecutionLog?> GetLatestLogAsync(string jobName, string jobGroup, CancellationToken ct = default)
+    {
+        await using var pooled = await db.GetConnectionAsync(ct).ConfigureAwait(false);
+        var conn = pooled.Connection;
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+                          SELECT id, job_name, job_group, start_time, end_time, duration_ms, exit_code, status, output, error, remark
+                          FROM execution_logs
+                          WHERE job_name = @name AND job_group = @group
+                          ORDER BY start_time DESC
+                          LIMIT 1
+                          """;
+        cmd.Parameters.AddWithValue("@name", jobName);
+        cmd.Parameters.AddWithValue("@group", jobGroup);
+        var logs = await ReadLogsAsync(cmd, ct).ConfigureAwait(false);
+        return logs.Count > 0 ? logs[0] : null;
+    }
+
     #region Helpers
 
     private static string BuildWhereClause(SqliteCommand cmd, string? jobName, string? jobGroup, string? status, string? searchKeyword = null)
