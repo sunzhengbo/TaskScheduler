@@ -112,11 +112,29 @@ public sealed class TaskImportCommand(ITaskSchedulerService taskService) : Async
             return 1;
         }
 
+        if (!string.IsNullOrWhiteSpace(model.Command.ScriptMode) && !ScriptModes.IsValid(model.Command.ScriptMode))
+        {
+            CliOutputFormatter.PrintError($"导入失败: 任务 '{model.Name}' 包含无效的执行模式 '{model.Command.ScriptMode}'，仅支持 '{ScriptModes.Inline}' 或 '{ScriptModes.File}'", settings.Json);
+            return 2;
+        }
+
+        string resolvedImportMode;
+        if (!string.IsNullOrWhiteSpace(model.Command.ScriptMode))
+        {
+            resolvedImportMode = ScriptModes.Normalize(model.Command.ScriptMode);
+        }
+        else
+        {
+            // 旧版未指定 scriptMode 导出文件：按内容与类型统一兼容推断
+            resolvedImportMode = ScriptModes.InferLegacyMode(model.Command.Type, model.Command.Content);
+        }
+
         var command = new CommandModel
         {
             Name = string.IsNullOrWhiteSpace(model.Command.Name) ? "命令1" : model.Command.Name,
             Type = CommandTypes.Normalize(model.Command.Type),
-            Content = model.Command.Content,
+            Content = model.Command.Content ?? string.Empty,
+            ScriptMode = resolvedImportMode,
             InterpreterVersion = model.Command.InterpreterVersion,
             Description = model.Command.Description
         };

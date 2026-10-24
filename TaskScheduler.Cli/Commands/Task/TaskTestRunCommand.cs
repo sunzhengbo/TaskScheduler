@@ -39,8 +39,16 @@ public sealed class TaskTestRunCommand(
         public string? CommandContent { get; set; }
 
         [CommandOption("-f|--cmd-file <FILE>")]
-        [Description("从脚本文件读取要测试执行的命令内容")]
+        [Description("从脚本文件读取要测试执行的命令内容（作为内联脚本执行）")]
         public string? CommandFile { get; set; }
+
+        [CommandOption("--file <PATH>")]
+        [Description("要直接测试执行的物理脚本文件路径（启用脚本文件执行模式）")]
+        public string? FilePath { get; set; }
+
+        [CommandOption("--mode <MODE>")]
+        [Description("执行模式（Inline: 脚本内容, File: 物理脚本文件，默认由参数推断或继承已有任务配置）")]
+        public string? Mode { get; set; }
 
         [CommandOption("--interpreter <PATH>")]
         [Description("可选指定解释器可执行文件路径或已配置版本名")]
@@ -49,9 +57,52 @@ public sealed class TaskTestRunCommand(
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        // 模式与参数校验
+        if (settings.Mode != null)
+        {
+            if (string.IsNullOrWhiteSpace(settings.Mode) || !ScriptModes.IsValid(settings.Mode))
+            {
+                CliOutputFormatter.PrintError($"无效的执行模式 '{settings.Mode}'，仅支持 '{ScriptModes.Inline}' 或 '{ScriptModes.File}'", settings.Json);
+                return 2;
+            }
+        }
+
+        // 互斥参数检测
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && !string.IsNullOrWhiteSpace(settings.CommandContent))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与 --cmd 互斥，请仅指定其中之一", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && !string.IsNullOrWhiteSpace(settings.CommandFile))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与 --cmd-file 互斥，请仅指定其中之一", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.CommandFile) && string.Equals(settings.Mode, ScriptModes.File, StringComparison.OrdinalIgnoreCase))
+        {
+            CliOutputFormatter.PrintError("参数 --cmd-file（从文件读取代码文本）与模式 --mode File 冲突，请直接使用 --file <PATH> 指定脚本文件路径", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && string.Equals(settings.Mode, ScriptModes.Inline, StringComparison.OrdinalIgnoreCase))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与模式 --mode Inline 冲突，指定 --file 时模式必须为 File（或省略 --mode）", settings.Json);
+            return 2;
+        }
+
         string cmdType;
         var cmdContent = settings.CommandContent;
         var interpreterPath = settings.Interpreter;
+        string? resolvedMode = !string.IsNullOrWhiteSpace(settings.Mode)
+            ? ScriptModes.Normalize(settings.Mode)
+            : (!string.IsNullOrWhiteSpace(settings.FilePath) ? ScriptModes.File : null);
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath))
+        {
+            cmdContent = settings.FilePath;
+        }
 
         if (!string.IsNullOrWhiteSpace(settings.TaskName))
         {
@@ -68,16 +119,18 @@ public sealed class TaskTestRunCommand(
                 return 1;
             }
 
-            // 若显式传入了 -t/--type，优先使用覆盖的类型；否则默认采用任务自身的命令类型
             cmdType = !string.IsNullOrWhiteSpace(settings.Type)
                 ? CommandTypes.Normalize(settings.Type)
                 : model.Type;
             cmdContent ??= model.Content;
+            resolvedMode ??= model.ScriptMode;
             interpreterPath ??= model.InterpreterVersion ?? model.InterpreterPath;
         }
         else
         {
             cmdType = CommandTypes.Normalize(settings.Type ?? "PowerShell");
+            resolvedMode ??= ScriptModes.Inline;
+
             if (string.IsNullOrWhiteSpace(cmdContent) && !string.IsNullOrWhiteSpace(settings.CommandFile))
             {
                 if (!File.Exists(settings.CommandFile))
@@ -97,7 +150,7 @@ public sealed class TaskTestRunCommand(
 
         if (string.IsNullOrWhiteSpace(cmdContent))
         {
-            CliOutputFormatter.PrintError("请提供要测试的命令内容（--cmd、--cmd-file 或 --name <已有任务名>）", settings.Json);
+            CliOutputFormatter.PrintError("请提供要测试的命令内容（--cmd、--file、--cmd-file 或 --name <已有任务名>）", settings.Json);
             return 2;
         }
 
@@ -108,7 +161,8 @@ public sealed class TaskTestRunCommand(
                 cmdContent,
                 cmdType,
                 interpreterPath,
-                ct: cancellationToken);
+                cancellationToken,
+                scriptMode: resolvedMode);
             sw.Stop();
 
             if (settings.Json)

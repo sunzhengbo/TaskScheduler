@@ -120,25 +120,64 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         _originalInterpreterName = null;
         InterpreterWarningMessage = null;
         HasInterpreterWarning = false;
+        IsInlineMode = true;
+        IsFileMode = false;
+        InlineScriptContent = string.Empty;
+        ScriptFilePath = string.Empty;
         Command = new CommandModel { Name = "命令1", Type = CommandTypes.PowerShell };
         Command.PropertyChanged += OnCommandModelPropertyChanged;
         SelectedCommandType = CommandTypes.PowerShell;
         UpdateInterpreterVersions();
     }
 
+    [ObservableProperty] private bool _isInlineMode = true;
+    [ObservableProperty] private bool _isFileMode = false;
+    [ObservableProperty] private string _inlineScriptContent = string.Empty;
+    [ObservableProperty] private string _scriptFilePath = string.Empty;
+
+    public string SelectedScriptMode => IsFileMode ? ScriptModes.File : ScriptModes.Inline;
+
+    partial void OnIsInlineModeChanged(bool value)
+    {
+        if (value)
+        {
+            if (IsFileMode) IsFileMode = false;
+            if (string.IsNullOrWhiteSpace(InlineScriptContent) && CommandTypes.Normalize(Command.Type) == CommandTypes.CSharp)
+            {
+                InlineScriptContent = GetCSharpStarterTemplate();
+            }
+        }
+        else if (!IsFileMode)
+        {
+            IsFileMode = true;
+        }
+    }
+
+    partial void OnIsFileModeChanged(bool value)
+    {
+        if (value)
+        {
+            if (IsInlineMode) IsInlineMode = false;
+        }
+        else if (!IsInlineMode)
+        {
+            IsInlineMode = true;
+        }
+    }
+
+    private static string GetCSharpStarterTemplate() =>
+        "// .NET 10 基于文件的应用 (File-based App)\n" +
+        "// 提示：支持通过指令直接引用 NuGet 包，如：#:package Humanizer@2.14.1\n" +
+        "using System;\n\n" +
+        "Console.WriteLine($\"Hello from C# Task! Current time: {DateTime.Now}\");\n";
+
     partial void OnSelectedCommandTypeChanged(string value)
     {
         Command.Type = value;
-        if (string.IsNullOrWhiteSpace(Command.Content))
+        var normalized = CommandTypes.Normalize(value);
+        if (normalized == CommandTypes.CSharp && string.IsNullOrWhiteSpace(InlineScriptContent))
         {
-            var normalized = CommandTypes.Normalize(value);
-            if (normalized == CommandTypes.CSharp)
-            {
-                Command.Content = "// .NET 10 基于文件的应用 (File-based App)\n" +
-                                  "// 提示：支持通过指令直接引用 NuGet 包，如：#:package Humanizer@2.14.1\n" +
-                                  "using System;\n\n" +
-                                  "Console.WriteLine($\"Hello from C# Task! Current time: {DateTime.Now}\");\n";
-            }
+            InlineScriptContent = GetCSharpStarterTemplate();
         }
         UpdateInterpreterVersions();
     }
@@ -468,6 +507,28 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                     _originalInterpreterName = cmd.InterpreterName ?? cmd.InterpreterVersion;
                     Command = cmd;
                     SelectedCommandType = cmd.Type;
+
+                    bool isFile = cmd.ScriptMode switch
+                    {
+                        ScriptModes.File => true,
+                        ScriptModes.Inline => false,
+                        _ => ScriptModes.InferLegacyMode(cmd.Type, cmd.Content) == ScriptModes.File
+                    };
+
+                    if (isFile)
+                    {
+                        IsFileMode = true;
+                        IsInlineMode = false;
+                        ScriptFilePath = cmd.Content.Trim();
+                        InlineScriptContent = string.Empty;
+                    }
+                    else
+                    {
+                        IsInlineMode = true;
+                        IsFileMode = false;
+                        InlineScriptContent = cmd.Content;
+                        ScriptFilePath = string.Empty;
+                    }
                 }
             }
             catch (Exception ex)
@@ -494,8 +555,23 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         TestOutput = "正在执行...";
         try
         {
-            var result = await _commandExecutor.ExecuteCommandAsync(
-                Command.Content, Command.Type, Command.InterpreterVersion ?? EffectiveInterpreterPath);
+            var targetContent = IsFileMode ? NormalizeScriptPath(ScriptFilePath) : InlineScriptContent;
+            if (string.IsNullOrWhiteSpace(targetContent))
+            {
+                TestOutput = IsFileMode ? "请提供脚本文件路径" : "请提供命令脚本内容";
+                return;
+            }
+
+            var tempCommand = new CommandModel
+            {
+                Name = Command.Name,
+                Type = Command.Type,
+                Content = targetContent,
+                ScriptMode = SelectedScriptMode,
+                InterpreterVersion = Command.InterpreterVersion ?? EffectiveInterpreterPath
+            };
+
+            var result = await _commandExecutor.ExecuteCommandAsync(tempCommand, _cts.Token);
             var text = $"退出码: {result.ExitCode}";
             if (!string.IsNullOrEmpty(result.Output))
                 text += $"\n输出:\n{result.Output}";
@@ -536,11 +612,20 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(Command.Content))
+        var targetContent = IsFileMode ? NormalizeScriptPath(ScriptFilePath) : InlineScriptContent;
+        if (string.IsNullOrWhiteSpace(targetContent))
         {
-            ValidationMessage = "请输入命令内容";
+            ValidationMessage = IsFileMode ? "请输入或选择脚本文件路径" : "请输入命令内容";
             return;
         }
+
+        if (IsFileMode)
+        {
+            ScriptFilePath = targetContent;
+        }
+
+        Command.Content = targetContent;
+        Command.ScriptMode = SelectedScriptMode;
 
         IsSaving = true;
         try
@@ -638,6 +723,51 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     }
 
     [RelayCommand]
+    private async Task BrowseScriptFileAsync()
+    {
+        try
+        {
+            var topLevel = GetTopLevel();
+            if (topLevel == null) return;
+
+            var normalized = CommandTypes.Normalize(Command.Type);
+            var (typeDesc, pattern) = normalized switch
+            {
+                CommandTypes.CSharp => ("C# 脚本文件", "*.cs"),
+                CommandTypes.Python => ("Python 脚本", "*.py"),
+                CommandTypes.PowerShell => ("PowerShell 脚本", "*.ps1"),
+                CommandTypes.Shell => ("Shell 脚本", "*.sh"),
+                CommandTypes.NodeJs => ("Node.js 脚本", "*.js"),
+                CommandTypes.VBScript => ("VBScript 脚本", "*.vbs"),
+                CommandTypes.Cmd => ("批处理文件", "*.bat;*.cmd"),
+                _ => ("脚本文件", "*.*")
+            };
+
+            var patterns = pattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+            {
+                Title = $"选择 {typeDesc}",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new Avalonia.Platform.Storage.FilePickerFileType(typeDesc) { Patterns = patterns },
+                    new Avalonia.Platform.Storage.FilePickerFileType("所有文件") { Patterns = ["*.*"] }
+                ]
+            });
+
+            if (files.Count > 0)
+            {
+                ScriptFilePath = Path.GetFullPath(files[0].Path.LocalPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "选择脚本文件失败");
+            ShowToast("选择脚本文件失败", NotificationType.Error);
+        }
+    }
+
+    [RelayCommand]
     private void Cancel()
     {
         _cts.Cancel();
@@ -696,11 +826,22 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     private void ImportFromJson(string json)
     {
         var model = TaskExportModel.FromJson(json);
-        if (model == null)
+        if (model == null || model.Command == null)
         {
             ShowToast("导入失败：无效的任务 JSON 格式", NotificationType.Error);
             return;
         }
+
+        if (!string.IsNullOrWhiteSpace(model.Command.ScriptMode) && !ScriptModes.IsValid(model.Command.ScriptMode))
+        {
+            ShowToast($"导入失败：包含无效的脚本执行模式 '{model.Command.ScriptMode}'", NotificationType.Error);
+            return;
+        }
+
+        var importedContent = model.Command.Content ?? string.Empty;
+        var importedMode = !string.IsNullOrWhiteSpace(model.Command.ScriptMode)
+            ? ScriptModes.Normalize(model.Command.ScriptMode)
+            : ScriptModes.InferLegacyMode(model.Command.Type, importedContent);
 
         TaskName = model.Name;
         Group = model.Group;
@@ -718,10 +859,26 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         {
             Name = model.Command.Name,
             Type = model.Command.Type,
-            Content = model.Command.Content,
+            Content = importedContent,
+            ScriptMode = importedMode,
             InterpreterVersion = model.Command.InterpreterVersion,
             Description = model.Command.Description
         };
+
+        if (importedMode == ScriptModes.File)
+        {
+            IsFileMode = true;
+            IsInlineMode = false;
+            ScriptFilePath = importedContent;
+            InlineScriptContent = string.Empty;
+        }
+        else
+        {
+            IsInlineMode = true;
+            IsFileMode = false;
+            InlineScriptContent = importedContent;
+            ScriptFilePath = string.Empty;
+        }
         SelectedCommandType = model.Command.Type;
 
         ShowToast("任务配置已从 JSON 导入");
@@ -806,12 +963,16 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             {
                 Name = Command.Name,
                 Type = Command.Type,
-                Content = Command.Content,
+                Content = IsFileMode ? NormalizeScriptPath(ScriptFilePath) : InlineScriptContent,
+                ScriptMode = SelectedScriptMode,
                 InterpreterVersion = Command.InterpreterVersion,
                 Description = Command.Description
             }
         };
     }
+
+    private static string NormalizeScriptPath(string path) =>
+        ScriptModes.NormalizeScriptCommandLine(path);
 
     private static Avalonia.Controls.TopLevel? GetTopLevel()
     {

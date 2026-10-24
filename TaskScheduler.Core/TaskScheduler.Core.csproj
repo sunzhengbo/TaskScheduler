@@ -19,6 +19,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\TaskScheduler.Infra\TaskScheduler.Infra.csproj" />
+      <InternalsVisibleTo Include="TaskScheduler.Tests" />
     </ItemGroup>
 
     <ItemGroup>

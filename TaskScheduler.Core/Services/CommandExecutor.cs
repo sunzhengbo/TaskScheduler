@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -13,24 +14,101 @@ public partial class CommandExecutor(
     IToolConfigService? toolConfigService = null,
     IInterpreterDetectionService? detectionService = null) : ICommandExecutor
 {
+    static CommandExecutor()
+    {
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        }
+        catch
+        {
+            // 忽略注册异常
+        }
+    }
+
+    private static Encoding GetOemEncoding()
+    {
+        try
+        {
+            return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+        }
+        catch
+        {
+            return Encoding.Default;
+        }
+    }
+
     private readonly IInterpreterDetectionService _detectionService = detectionService ?? InterpreterDetectionService.Default;
+
+    public Task<CommandResult> ExecuteCommandAsync(
+        CommandModel model,
+        CancellationToken ct = default,
+        string? envVariables = null)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return ExecuteCommandAsync(
+            model.Content,
+            model.Type,
+            model.InterpreterVersion ?? model.InterpreterPath,
+            ct,
+            envVariables,
+            model.ScriptMode);
+    }
 
     public async Task<CommandResult> ExecuteCommandAsync(
         string command,
         string type,
         string? interpreter = null,
         CancellationToken ct = default,
-        string? envVariables = null)
+        string? envVariables = null,
+        string? scriptMode = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
         var normalizedType = CommandTypes.Normalize(type);
 
-        // 对特定命令类型的参数进行快速预检（无需解释器参与，节省探测开销并提供精准错误反馈）
-        if (normalizedType == CommandTypes.CSharp)
+        // 判定执行模式：显式优先；未提供模式时对存量任务做安全回退（单行且物理文件存在则自动走 File）
+        bool isFileMode;
+        if (string.Equals(scriptMode, ScriptModes.File, StringComparison.OrdinalIgnoreCase))
         {
-            var precheckResult = PrevalidateCSharpCommand(command);
-            if (precheckResult != null)
-                return precheckResult;
+            isFileMode = true;
+        }
+        else if (string.Equals(scriptMode, ScriptModes.Inline, StringComparison.OrdinalIgnoreCase))
+        {
+            isFileMode = false;
+        }
+        else
+        {
+            isFileMode = ScriptModes.InferLegacyMode(normalizedType, command) == ScriptModes.File;
+        }
+
+        // 文件模式前置校验
+        string? scriptPath = null;
+        string? scriptArgs = null;
+        if (isFileMode)
+        {
+            (scriptPath, scriptArgs) = SplitScriptPathAndArgs(command);
+
+            if (normalizedType == CommandTypes.CSharp)
+            {
+                if (scriptPath.EndsWith(".csx", StringComparison.OrdinalIgnoreCase))
+                    return new CommandResult(-1, string.Empty, "dotnet run 不支持 .csx，请改用 .NET 10 基于文件的应用格式（.cs）。");
+                if (!scriptPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    return new CommandResult(-1, string.Empty, $"C# 命令类型仅支持 .cs 脚本文件，当前输入: {scriptPath}");
+            }
+
+            if (!File.Exists(scriptPath))
+            {
+                return new CommandResult(-1, string.Empty, $"脚本文件不存在: {scriptPath}");
+            }
+        }
+        else if (normalizedType == CommandTypes.CSharp)
+        {
+            var trimmed = command.Trim();
+            bool isSingleLine = !trimmed.Contains('\n') && !trimmed.Contains('\r');
+            if (isSingleLine && trimmed.EndsWith(".csx", StringComparison.OrdinalIgnoreCase))
+            {
+                return new CommandResult(-1, string.Empty, "dotnet run 不支持 .csx，请改用 .NET 10 基于文件的应用格式（.cs）。");
+            }
         }
 
         var (resolvedExecutable, resolvedEnvVars) = await ResolveInterpreterAsync(
@@ -39,18 +117,19 @@ public partial class CommandExecutor(
             envVariables,
             ct).ConfigureAwait(false);
 
-        logger.LogInformation("Executing command (Type: {Type}, Executable: {Executable})", normalizedType, resolvedExecutable);
+        logger.LogInformation("Executing command (Type: {Type}, Executable: {Executable}, Mode: {Mode})",
+            normalizedType, resolvedExecutable, isFileMode ? ScriptModes.File : ScriptModes.Inline);
 
         if (normalizedType == CommandTypes.VBScript)
         {
             if (!OperatingSystem.IsWindows())
                 return new CommandResult(-1, string.Empty, "VBScript is only supported on Windows.");
-            return await ExecuteVBScriptAsync(command, resolvedExecutable, resolvedEnvVars, ct).ConfigureAwait(false);
+            return await ExecuteVBScriptAsync(command, resolvedExecutable, resolvedEnvVars, isFileMode, scriptPath, scriptArgs, ct).ConfigureAwait(false);
         }
 
         if (normalizedType == CommandTypes.CSharp)
         {
-            return await ExecuteCSharpAsync(command, resolvedExecutable, resolvedEnvVars, ct).ConfigureAwait(false);
+            return await ExecuteCSharpAsync(command, resolvedExecutable, resolvedEnvVars, isFileMode, scriptPath, scriptArgs, ct).ConfigureAwait(false);
         }
 
         var processStartInfo = new ProcessStartInfo
@@ -59,51 +138,92 @@ public partial class CommandExecutor(
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            UseShellExecute = false
+            UseShellExecute = false,
+            WorkingDirectory = isFileMode && scriptPath != null
+                ? (Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory)
+                : Environment.CurrentDirectory
         };
 
         ApplyEnvironmentVariables(processStartInfo, resolvedEnvVars);
 
-        switch (normalizedType)
+        if (isFileMode && scriptPath != null)
         {
-            case CommandTypes.PowerShell:
-                processStartInfo.StandardOutputEncoding = Encoding.UTF8;
-                processStartInfo.StandardErrorEncoding = Encoding.UTF8;
-                processStartInfo.Environment["NO_COLOR"] = "1";
-                processStartInfo.ArgumentList.Add("-NoProfile");
-                processStartInfo.ArgumentList.Add("-ExecutionPolicy");
-                processStartInfo.ArgumentList.Add("Bypass");
-                processStartInfo.ArgumentList.Add("-Command");
-                processStartInfo.ArgumentList.Add(
-                    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); " +
-                    "if ($PSStyle) { $PSStyle.OutputRendering = 'PlainText' }; " +
-                    command);
-                break;
+            switch (normalizedType)
+            {
+                case CommandTypes.PowerShell:
+                    processStartInfo.StandardOutputEncoding = Encoding.UTF8;
+                    processStartInfo.StandardErrorEncoding = Encoding.UTF8;
+                    processStartInfo.Environment["NO_COLOR"] = "1";
+                    processStartInfo.ArgumentList.Add("-NoProfile");
+                    processStartInfo.ArgumentList.Add("-ExecutionPolicy");
+                    processStartInfo.ArgumentList.Add("Bypass");
+                    processStartInfo.ArgumentList.Add("-File");
+                    processStartInfo.ArgumentList.Add(scriptPath);
+                    AppendArguments(processStartInfo, scriptArgs);
+                    break;
 
-            case CommandTypes.Python:
-                processStartInfo.ArgumentList.Add("-c");
-                processStartInfo.ArgumentList.Add(command);
-                break;
+                case CommandTypes.Python:
+                case CommandTypes.Shell:
+                case CommandTypes.NodeJs:
+                    processStartInfo.ArgumentList.Add(scriptPath);
+                    AppendArguments(processStartInfo, scriptArgs);
+                    break;
 
-            case CommandTypes.Shell:
-                processStartInfo.ArgumentList.Add("-c");
-                processStartInfo.ArgumentList.Add(command);
-                break;
+                case CommandTypes.Cmd:
+                    if (!OperatingSystem.IsWindows())
+                        return new CommandResult(-1, string.Empty, "Cmd is only supported on Windows.");
+                    processStartInfo.ArgumentList.Add("/C");
+                    processStartInfo.ArgumentList.Add(scriptPath);
+                    AppendArguments(processStartInfo, scriptArgs);
+                    break;
 
-            case CommandTypes.NodeJs:
-                processStartInfo.ArgumentList.Add("-e");
-                processStartInfo.ArgumentList.Add(command);
-                break;
+                default:
+                    return new CommandResult(-1, string.Empty, $"Unsupported command type: {type}");
+            }
+        }
+        else
+        {
+            switch (normalizedType)
+            {
+                case CommandTypes.PowerShell:
+                    processStartInfo.StandardOutputEncoding = Encoding.UTF8;
+                    processStartInfo.StandardErrorEncoding = Encoding.UTF8;
+                    processStartInfo.Environment["NO_COLOR"] = "1";
+                    processStartInfo.ArgumentList.Add("-NoProfile");
+                    processStartInfo.ArgumentList.Add("-ExecutionPolicy");
+                    processStartInfo.ArgumentList.Add("Bypass");
+                    processStartInfo.ArgumentList.Add("-Command");
+                    processStartInfo.ArgumentList.Add(
+                        "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); " +
+                        "if ($PSStyle) { $PSStyle.OutputRendering = 'PlainText' }; " +
+                        command);
+                    break;
 
-            case CommandTypes.Cmd:
-                if (!OperatingSystem.IsWindows())
-                    return new CommandResult(-1, string.Empty, "Cmd is only supported on Windows.");
-                processStartInfo.ArgumentList.Add("/C");
-                processStartInfo.ArgumentList.Add(command);
-                break;
+                case CommandTypes.Python:
+                    processStartInfo.ArgumentList.Add("-c");
+                    processStartInfo.ArgumentList.Add(command);
+                    break;
 
-            default:
-                return new CommandResult(-1, string.Empty, $"Unsupported command type: {type}");
+                case CommandTypes.Shell:
+                    processStartInfo.ArgumentList.Add("-c");
+                    processStartInfo.ArgumentList.Add(command);
+                    break;
+
+                case CommandTypes.NodeJs:
+                    processStartInfo.ArgumentList.Add("-e");
+                    processStartInfo.ArgumentList.Add(command);
+                    break;
+
+                case CommandTypes.Cmd:
+                    if (!OperatingSystem.IsWindows())
+                        return new CommandResult(-1, string.Empty, "Cmd is only supported on Windows.");
+                    processStartInfo.ArgumentList.Add("/C");
+                    processStartInfo.ArgumentList.Add(command);
+                    break;
+
+                default:
+                    return new CommandResult(-1, string.Empty, $"Unsupported command type: {type}");
+            }
         }
 
         using var process = new Process();
@@ -303,39 +423,152 @@ public partial class CommandExecutor(
         }
     }
 
-    /// <summary>
-    /// 执行 VBScript 脚本。cscript.exe 不支持内联代码，需写入临时文件后执行。
-    /// </summary>
-    private async Task<CommandResult> ExecuteVBScriptAsync(string command, string interpreterPath, string? envVariables, CancellationToken ct)
+
+
+    private static (string Path, string? Args) SplitScriptPathAndArgs(string input) =>
+        ScriptModes.SplitScriptPathAndArgs(input);
+
+    private static void AppendArguments(ProcessStartInfo psi, string? args)
     {
-        var tempFile = Path.Combine(Path.GetTempPath(), $"taskscheduler_{Guid.NewGuid():N}.vbs");
+        if (string.IsNullOrWhiteSpace(args)) return;
+        var tokens = ParseCommandLineArgs(args);
+        foreach (var token in tokens)
+        {
+            psi.ArgumentList.Add(token);
+        }
+    }
+
+    internal static List<string> ParseCommandLineArgs(string commandLine)
+    {
+        var args = new List<string>();
+        if (string.IsNullOrWhiteSpace(commandLine)) return args;
+
+        var current = new StringBuilder();
+        bool inQuotes = false;
+        bool hasToken = false;
+        int i = 0;
+
+        while (i < commandLine.Length)
+        {
+            int slashCount = 0;
+            while (i < commandLine.Length && commandLine[i] == '\\')
+            {
+                slashCount++;
+                i++;
+            }
+
+            if (i < commandLine.Length && commandLine[i] == '"')
+            {
+                hasToken = true;
+                current.Append('\\', slashCount / 2);
+                if (slashCount % 2 != 0)
+                {
+                    current.Append('"');
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+                i++;
+            }
+            else
+            {
+                if (slashCount > 0)
+                {
+                    hasToken = true;
+                    current.Append('\\', slashCount);
+                }
+
+                if (i >= commandLine.Length)
+                    break;
+
+                char c = commandLine[i];
+                if (char.IsWhiteSpace(c) && !inQuotes)
+                {
+                    if (hasToken)
+                    {
+                        args.Add(current.ToString());
+                        current.Clear();
+                        hasToken = false;
+                    }
+                }
+                else
+                {
+                    hasToken = true;
+                    current.Append(c);
+                }
+                i++;
+            }
+        }
+
+        if (hasToken)
+        {
+            args.Add(current.ToString());
+        }
+
+        return args;
+    }
+
+    private async Task<CommandResult> ExecuteVBScriptAsync(
+        string command,
+        string interpreterPath,
+        string? envVariables,
+        bool isFileMode,
+        string? scriptPath,
+        string? scriptArgs,
+        CancellationToken ct)
+    {
+        string targetScriptPath;
+        bool isTempFile = false;
+
+        if (isFileMode && scriptPath != null)
+        {
+            targetScriptPath = scriptPath;
+        }
+        else
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "TaskScheduler", "scripts");
+            Directory.CreateDirectory(tempDir);
+            targetScriptPath = Path.Combine(tempDir, $"task_{Guid.NewGuid():N}.vbs");
+            isTempFile = true;
+        }
+
         try
         {
-            await File.WriteAllTextAsync(tempFile, command, ct).ConfigureAwait(false);
+            if (isTempFile)
+            {
+                await File.WriteAllTextAsync(targetScriptPath, command, Encoding.Default, ct).ConfigureAwait(false);
+            }
 
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = !string.IsNullOrWhiteSpace(interpreterPath) ? interpreterPath : "cscript.exe",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = GetOemEncoding(),
+                StandardErrorEncoding = GetOemEncoding(),
                 CreateNoWindow = true,
-                UseShellExecute = false
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(targetScriptPath) ?? Environment.CurrentDirectory
             };
-            ApplyEnvironmentVariables(processStartInfo, envVariables);
-            processStartInfo.ArgumentList.Add("//NoLogo");
-            processStartInfo.ArgumentList.Add(tempFile);
 
-            using var process = new Process();
-            process.StartInfo = processStartInfo;
+            ApplyEnvironmentVariables(processStartInfo, envVariables);
+            processStartInfo.ArgumentList.Add("//Nologo");
+            processStartInfo.ArgumentList.Add(targetScriptPath);
+            if (isFileMode)
+            {
+                AppendArguments(processStartInfo, scriptArgs);
+            }
+
+            using var process = new Process { StartInfo = processStartInfo };
             if (!process.Start())
                 return new CommandResult(-1, string.Empty, "Failed to start VBScript process.");
 
-            Task<string> outputTask;
-            Task<string> errorTask;
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(ct);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(ct);
+
             try
             {
-                outputTask = process.StandardOutput.ReadToEndAsync(ct);
-                errorTask = process.StandardError.ReadToEndAsync(ct);
                 await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
                 await process.WaitForExitAsync(ct).ConfigureAwait(false);
             }
@@ -353,65 +586,28 @@ public partial class CommandExecutor(
         }
         finally
         {
-            try { File.Delete(tempFile); } catch (Exception ex) { logger.LogWarning(ex, "清理 VBScript 临时文件失败: {Path}", tempFile); }
-        }
-    }
-
-    /// <summary>
-    /// 对 C# 脚本命令入参进行纯参数校验（无解释器依赖）。
-    /// </summary>
-    private static CommandResult? PrevalidateCSharpCommand(string command)
-    {
-        var trimmed = command.Trim();
-        bool isSingleLine = !trimmed.Contains('\n') && !trimmed.Contains('\r');
-        if (!isSingleLine)
-            return null;
-
-        // 1. 若为单行且以 .csx 结尾，明确提示不支持并引导使用 .NET 10 .cs 格式
-        if (trimmed.EndsWith(".csx", StringComparison.OrdinalIgnoreCase))
-        {
-            return new CommandResult(-1, string.Empty, "dotnet run 不支持 .csx，请改用 .NET 10 基于文件的应用格式（.cs）。");
-        }
-
-        // 2. 若单行以 .cs 结尾，必然期望执行物理文件，若文件不存在则报错
-        if (trimmed.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-        {
-            if (!File.Exists(trimmed))
+            if (isTempFile && File.Exists(targetScriptPath))
             {
-                return new CommandResult(-1, string.Empty, $"脚本文件不存在: {trimmed}");
+                try { File.Delete(targetScriptPath); } catch (Exception ex) { logger.LogWarning(ex, "清理 VBScript 临时文件失败: {Path}", targetScriptPath); }
             }
-            return null;
         }
-
-        // 3. 若为单行且为本地已存在的文件，但扩展名非 .cs，明确提示不支持
-        if (File.Exists(trimmed))
-        {
-            return new CommandResult(-1, string.Empty, $"C# 命令类型仅支持 .cs 脚本文件，当前输入: {trimmed}");
-        }
-
-        return null;
     }
 
-    /// <summary>
-    /// 执行 .NET 10 基于文件的应用（单文件 C# 脚本）。
-    /// 若输入为本地存在的 .cs 文件路径，则直接运行该物理文件（归一化为绝对路径）；
-    /// 若输入为代码文本，则以 UTF-8（无 BOM）保存至临时目录后通过 dotnet run 执行。
-    /// </summary>
     private async Task<CommandResult> ExecuteCSharpAsync(
         string command,
         string interpreterPath,
         string? envVariables,
+        bool isFileMode,
+        string? scriptPath,
+        string? scriptArgs,
         CancellationToken ct)
     {
-        var trimmed = command.Trim();
-        bool isSingleLine = !trimmed.Contains('\n') && !trimmed.Contains('\r');
-
         string targetScriptPath;
         bool isTempFile = false;
 
-        if (isSingleLine && trimmed.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(trimmed))
+        if (isFileMode && scriptPath != null)
         {
-            targetScriptPath = Path.GetFullPath(trimmed);
+            targetScriptPath = scriptPath;
         }
         else
         {
@@ -425,7 +621,6 @@ public partial class CommandExecutor(
         {
             if (isTempFile)
             {
-                // 统一采用无 BOM UTF-8 保存（写入放在 try 内，确保中途失败或取消时 finally 能够清理残余文件）
                 await File.WriteAllTextAsync(targetScriptPath, command, new UTF8Encoding(false), ct).ConfigureAwait(false);
             }
 
@@ -452,6 +647,11 @@ public partial class CommandExecutor(
             processStartInfo.ArgumentList.Add("quiet");
             processStartInfo.ArgumentList.Add("--file");
             processStartInfo.ArgumentList.Add(targetScriptPath);
+            if (isFileMode && !string.IsNullOrWhiteSpace(scriptArgs))
+            {
+                processStartInfo.ArgumentList.Add("--");
+                AppendArguments(processStartInfo, scriptArgs);
+            }
 
             using var process = new Process { StartInfo = processStartInfo };
             if (!process.Start())
@@ -476,7 +676,6 @@ public partial class CommandExecutor(
 
             logger.LogInformation("C# single-file script executed with exit code: {ExitCode}", process.ExitCode);
 
-            // 若退出码非 0 且检测到低版本 SDK 特征报错，提供友好诊断指引
             bool isLowVersionSdk = process.ExitCode != 0 &&
                 ((errorText != null && (
                     (errorText.Contains("--file", StringComparison.OrdinalIgnoreCase) && errorText.Contains("Unrecognized", StringComparison.OrdinalIgnoreCase)) ||

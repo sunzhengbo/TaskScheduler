@@ -64,8 +64,16 @@ public sealed class TaskUpdateCommand(
         public string? CommandContent { get; set; }
 
         [CommandOption("--cmd-file <FILE>")]
-        [Description("从脚本文件读取并更新命令内容")]
+        [Description("从脚本文件读取并更新命令内容（作为内联脚本保存）")]
         public string? CommandFile { get; set; }
+
+        [CommandOption("--file <PATH>")]
+        [Description("更新物理脚本文件路径（启用脚本文件执行模式，路径将自动归一化为绝对路径保存）")]
+        public string? FilePath { get; set; }
+
+        [CommandOption("--script-mode|--mode <MODE>")]
+        [Description("更新执行模式（Inline: 脚本内容, File: 物理脚本文件）")]
+        public string? ScriptMode { get; set; }
 
         [CommandOption("--interpreter <VERSION_OR_PATH>")]
         [Description("更新解释器版本名称或路径")]
@@ -88,19 +96,73 @@ public sealed class TaskUpdateCommand(
         var existingCommand = CommandModel.DeserializeFromJson(existingTask.CommandJson) ?? new CommandModel { Name = "命令1" };
         var existingTrigger = existingTask.Triggers.FirstOrDefault();
 
-        var cmdContent = existingCommand.Content;
-        if (!string.IsNullOrWhiteSpace(settings.CommandContent))
+        if (settings.ScriptMode != null)
         {
-            cmdContent = settings.CommandContent;
-        }
-        else if (!string.IsNullOrWhiteSpace(settings.CommandFile))
-        {
-            if (!File.Exists(settings.CommandFile))
+            if (string.IsNullOrWhiteSpace(settings.ScriptMode) || !ScriptModes.IsValid(settings.ScriptMode))
             {
-                CliOutputFormatter.PrintError($"脚本文件不存在: {settings.CommandFile}", settings.Json);
+                CliOutputFormatter.PrintError($"无效的执行模式 '{settings.ScriptMode}'，仅支持 '{ScriptModes.Inline}' 或 '{ScriptModes.File}'", settings.Json);
                 return 2;
             }
-            cmdContent = await File.ReadAllTextAsync(settings.CommandFile, cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && !string.IsNullOrWhiteSpace(settings.CommandContent))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与 --cmd 互斥，请仅指定其中之一", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && !string.IsNullOrWhiteSpace(settings.CommandFile))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与 --cmd-file 互斥，请仅指定其中之一", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.CommandFile) && string.Equals(settings.ScriptMode, ScriptModes.File, StringComparison.OrdinalIgnoreCase))
+        {
+            CliOutputFormatter.PrintError("参数 --cmd-file（从文件读取代码文本）与模式 --mode File 冲突，请直接使用 --file <PATH> 指定脚本文件路径", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && string.Equals(settings.ScriptMode, ScriptModes.Inline, StringComparison.OrdinalIgnoreCase))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与模式 --mode Inline 冲突，指定 --file 时模式必须为 File（或省略 --mode）", settings.Json);
+            return 2;
+        }
+
+        var cmdContent = existingCommand.Content;
+        var resolvedMode = existingCommand.ScriptMode;
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath))
+        {
+            resolvedMode = ScriptModes.File;
+            cmdContent = Path.GetFullPath(settings.FilePath);
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(settings.ScriptMode))
+            {
+                resolvedMode = ScriptModes.Normalize(settings.ScriptMode);
+            }
+
+            if (!string.IsNullOrWhiteSpace(settings.CommandContent))
+            {
+                cmdContent = resolvedMode == ScriptModes.File
+                    ? ScriptModes.NormalizeScriptCommandLine(settings.CommandContent)
+                    : settings.CommandContent;
+            }
+            else if (!string.IsNullOrWhiteSpace(settings.CommandFile))
+            {
+                if (!File.Exists(settings.CommandFile))
+                {
+                    CliOutputFormatter.PrintError($"脚本文件不存在: {settings.CommandFile}", settings.Json);
+                    return 2;
+                }
+                cmdContent = await File.ReadAllTextAsync(settings.CommandFile, cancellationToken);
+                if (string.IsNullOrWhiteSpace(settings.ScriptMode))
+                {
+                    resolvedMode = ScriptModes.Inline;
+                }
+            }
         }
 
         var cmdType = !string.IsNullOrWhiteSpace(settings.CommandType)
@@ -120,6 +182,7 @@ public sealed class TaskUpdateCommand(
             Name = settings.CommandName ?? existingCommand.Name,
             Type = cmdType,
             Content = cmdContent,
+            ScriptMode = resolvedMode,
             InterpreterVersion = interpreter,
             Description = settings.CommandDescription ?? existingCommand.Description,
             CreatedAt = existingCommand.CreatedAt,

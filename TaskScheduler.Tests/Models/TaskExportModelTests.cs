@@ -119,4 +119,27 @@ public class TaskExportModelTests
         Assert.That(exportModel.RepeatInterval, Is.EqualTo("00:30:00"));
         Assert.That(exportModel.Command.Content, Is.EqualTo("del /q /f C:\\temp\\*.*"));
     }
+
+    [Test]
+    public void TaskExportModel_RoundtripSerialization_PreservesScriptMode()
+    {
+        var model = new TaskExportModel
+        {
+            Name = "脚本文件任务",
+            Command = new CommandExportModel
+            {
+                Name = "运行脚本",
+                Type = CommandTypes.CSharp,
+                Content = "D:\\scripts\\backup.cs",
+                ScriptMode = ScriptModes.File
+            }
+        };
+
+        var json = model.ToJson();
+        Assert.That(json, Does.Contain("\"scriptMode\": \"File\""));
+
+        var deserialized = TaskExportModel.FromJson(json);
+        Assert.That(deserialized, Is.Not.Null);
+        Assert.That(deserialized!.Command.ScriptMode, Is.EqualTo(ScriptModes.File));
+    }
 }

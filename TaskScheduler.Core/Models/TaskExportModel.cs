@@ -63,7 +63,8 @@ public class TaskExportModel
                 Type = cmd.Type,
                 Content = cmd.Content,
                 InterpreterVersion = cmd.InterpreterVersion,
-                Description = cmd.Description
+                Description = cmd.Description,
+                ScriptMode = cmd.ScriptMode
             };
         }
 

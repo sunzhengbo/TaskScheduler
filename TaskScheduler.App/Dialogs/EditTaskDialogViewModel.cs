@@ -107,10 +107,7 @@ public partial class EditTaskDialogViewModel : ObservableObject
 
         try
         {
-            var result = await _commandExecutor.ExecuteCommandAsync(
-                Command.Content,
-                Command.Type,
-                Command.InterpreterPath);
+            var result = await _commandExecutor.ExecuteCommandAsync(Command);
 
             var text = $"退出码: {result.ExitCode}";
             if (!string.IsNullOrEmpty(result.Output))

@@ -197,13 +197,42 @@
                                         CommandParameter="{Binding EffectiveInterpreterPath}" />
                             </Grid>
                         </StackPanel>
+
+                        <!-- 执行方式单选切换 -->
+                        <StackPanel Spacing="6" Margin="0,4,0,0">
+                            <TextBlock Text="执行方式" FontSize="13" />
+                            <StackPanel Orientation="Horizontal" Spacing="24">
+                                <RadioButton Content="编写脚本内容 (Inline)" GroupName="ScriptModeGroup"
+                                             IsChecked="{Binding IsInlineMode}" />
+                                <RadioButton Content="指定脚本文件 (File)" GroupName="ScriptModeGroup"
+                                             IsChecked="{Binding IsFileMode}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 模式 2: 脚本文件模式 (File) -->
+                        <StackPanel Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsFileMode}">
+                            <TextBlock Text="脚本文件路径" FontSize="13" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBox Grid.Column="0" Text="{Binding ScriptFilePath}"
+                                         PlaceholderText="请输入物理脚本文件的绝对路径，或点击右侧按钮选择…"
+                                         VerticalAlignment="Center"
+                                         FontFamily="Consolas,Courier New,monospace"
+                                         FontSize="13" />
+                                <Button Grid.Column="1" Classes="Primary" Padding="12,6"
+                                        Content="浏览文件..."
+                                        Command="{Binding BrowseScriptFileCommand}" />
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
-                    <Grid RowDefinitions="Auto,*" RowSpacing="4" Margin="0,12,0,0">
-                        <TextBlock Grid.Row="0" Text="命令内容" FontSize="13" />
-                        <TextBox Grid.Row="1" Text="{Binding Command.Content}"
-                                 PlaceholderText="输入要执行的命令…"
+
+                    <!-- 模式 1: 脚本内容模式 (Inline) -->
+                    <Grid RowDefinitions="Auto,*" RowSpacing="4" Margin="0,12,0,0" IsVisible="{Binding IsInlineMode}">
+                        <TextBlock Grid.Row="0" Text="脚本内容" FontSize="13" />
+                        <TextBox Grid.Row="1" Text="{Binding InlineScriptContent}"
+                                 PlaceholderText="输入要执行的脚本代码…"
                                  AcceptsReturn="True" TextWrapping="Wrap"
                                  VerticalAlignment="Stretch"
+                                 MinHeight="140"
                                  FontFamily="Consolas,Courier New,monospace"
                                  FontSize="13" />
                     </Grid>

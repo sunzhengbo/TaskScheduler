@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Threading;
 using Avalonia;
 using TaskScheduler.Core.Services;
@@ -17,6 +18,7 @@ internal abstract class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         IsApplicationStartup = true;
         _mutex = new Mutex(false, SchedulerBootstrapService.SchedulerMutexName);
         var acquired = false;

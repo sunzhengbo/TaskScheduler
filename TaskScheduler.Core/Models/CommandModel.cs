@@ -10,6 +10,7 @@ public partial class CommandModel : INotifyPropertyChanged
     private string _name = string.Empty;
     private string _type = CommandTypes.PowerShell;
     private string _content = string.Empty;
+    private string? _scriptMode;
     private string? _interpreterVersion;
     private string? _description;
 
@@ -33,6 +34,15 @@ public partial class CommandModel : INotifyPropertyChanged
     {
         get => _content;
         set => SetField(ref _content, value);
+    }
+
+    /// <summary>
+    /// 脚本执行模式：<see cref="ScriptModes.Inline"/>（代码内容）、<see cref="ScriptModes.File"/>（物理文件路径），或 null（旧版未指定时自动兼容探测）。
+    /// </summary>
+    public string? ScriptMode
+    {
+        get => _scriptMode;
+        set => SetField(ref _scriptMode, value);
     }
 
     public string? InterpreterVersion

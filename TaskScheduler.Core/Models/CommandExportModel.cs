@@ -21,4 +21,7 @@ public class CommandExportModel
 
     [JsonPropertyName("description")]
     public string? Description { get; set; }
+
+    [JsonPropertyName("scriptMode")]
+    public string? ScriptMode { get; set; }
 }

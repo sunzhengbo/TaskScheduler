@@ -76,8 +76,16 @@ public sealed class TaskCreateCommand(
         public string? CommandContent { get; set; }
 
         [CommandOption("--cmd-file <FILE>")]
-        [Description("从指定脚本文件读取命令内容")]
+        [Description("从指定脚本文件读取命令内容（作为内联脚本保存）")]
         public string? CommandFile { get; set; }
+
+        [CommandOption("--file <PATH>")]
+        [Description("物理脚本文件路径（启用脚本文件执行模式，路径将自动归一化为绝对路径保存）")]
+        public string? FilePath { get; set; }
+
+        [CommandOption("--script-mode|--mode <MODE>")]
+        [Description("执行模式（Inline: 脚本内容, File: 物理脚本文件，默认由参数推断或为 Inline）")]
+        public string? ScriptMode { get; set; }
 
         [CommandOption("--interpreter <VERSION_OR_PATH>")]
         [Description("指定解释器版本名称或可执行文件路径（不指定则自动选用默认版本）")]
@@ -103,15 +111,66 @@ public sealed class TaskCreateCommand(
             return 2;
         }
 
-        var cmdContent = settings.CommandContent;
-        if (string.IsNullOrWhiteSpace(cmdContent) && !string.IsNullOrWhiteSpace(settings.CommandFile))
+        if (settings.ScriptMode != null)
         {
-            if (!File.Exists(settings.CommandFile))
+            if (string.IsNullOrWhiteSpace(settings.ScriptMode) || !ScriptModes.IsValid(settings.ScriptMode))
             {
-                CliOutputFormatter.PrintError($"指定的脚本文件不存在: {settings.CommandFile}", settings.Json);
+                CliOutputFormatter.PrintError($"无效的执行模式 '{settings.ScriptMode}'，仅支持 '{ScriptModes.Inline}' 或 '{ScriptModes.File}'", settings.Json);
                 return 2;
             }
-            cmdContent = await File.ReadAllTextAsync(settings.CommandFile, cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && !string.IsNullOrWhiteSpace(settings.CommandContent))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与 --cmd 互斥，请仅指定其中之一", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && !string.IsNullOrWhiteSpace(settings.CommandFile))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与 --cmd-file 互斥，请仅指定其中之一", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.CommandFile) && string.Equals(settings.ScriptMode, ScriptModes.File, StringComparison.OrdinalIgnoreCase))
+        {
+            CliOutputFormatter.PrintError("参数 --cmd-file（从文件读取代码文本）与模式 --mode File 冲突，请直接使用 --file <PATH> 指定脚本文件路径", settings.Json);
+            return 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath) && string.Equals(settings.ScriptMode, ScriptModes.Inline, StringComparison.OrdinalIgnoreCase))
+        {
+            CliOutputFormatter.PrintError("参数 --file 与模式 --mode Inline 冲突，指定 --file 时模式必须为 File（或省略 --mode）", settings.Json);
+            return 2;
+        }
+
+        var cmdContent = settings.CommandContent;
+        string resolvedMode;
+
+        if (!string.IsNullOrWhiteSpace(settings.FilePath))
+        {
+            resolvedMode = ScriptModes.File;
+            cmdContent = Path.GetFullPath(settings.FilePath);
+        }
+        else
+        {
+            resolvedMode = !string.IsNullOrWhiteSpace(settings.ScriptMode)
+                ? ScriptModes.Normalize(settings.ScriptMode)
+                : ScriptModes.Inline;
+
+            if (string.IsNullOrWhiteSpace(cmdContent) && !string.IsNullOrWhiteSpace(settings.CommandFile))
+            {
+                if (!File.Exists(settings.CommandFile))
+                {
+                    CliOutputFormatter.PrintError($"指定的脚本文件不存在: {settings.CommandFile}", settings.Json);
+                    return 2;
+                }
+                cmdContent = await File.ReadAllTextAsync(settings.CommandFile, cancellationToken);
+            }
+            else if (resolvedMode == ScriptModes.File && !string.IsNullOrWhiteSpace(cmdContent))
+            {
+                cmdContent = ScriptModes.NormalizeScriptCommandLine(cmdContent);
+            }
         }
 
         if (settings.TriggerType == TriggerType.Cron)
@@ -138,7 +197,7 @@ public sealed class TaskCreateCommand(
 
         if (string.IsNullOrWhiteSpace(cmdContent))
         {
-            CliOutputFormatter.PrintError("请输入命令内容（使用 --cmd 或 --cmd-file 指定）", settings.Json);
+            CliOutputFormatter.PrintError("请输入命令内容或脚本文件路径（使用 --file、--cmd 或 --cmd-file 指定）", settings.Json);
             return 2;
         }
 
@@ -150,6 +209,7 @@ public sealed class TaskCreateCommand(
             Name = string.IsNullOrWhiteSpace(settings.CommandName) ? "命令1" : settings.CommandName,
             Type = normalizedCmdType,
             Content = cmdContent,
+            ScriptMode = resolvedMode,
             InterpreterVersion = interpreterVersion,
             Description = settings.CommandDescription
         };

@@ -343,4 +343,144 @@ public class CommandExecutorTests
 
         return null;
     }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpFileMode_ExecutesSuccessfully()
+    {
+        if (CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp) is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_filemode_{Guid.NewGuid():N}.cs");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "using System; Console.WriteLine(\"file_mode_ok\");", new System.Text.UTF8Encoding(false));
+            var model = new CommandModel
+            {
+                Type = CommandTypes.CSharp,
+                Content = tempFile,
+                ScriptMode = ScriptModes.File
+            };
+
+            var result = await _executor.ExecuteCommandAsync(model);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Output, Does.Contain("file_mode_ok"));
+        }
+        finally
+        {
+            try { File.Delete(tempFile); } catch { }
+        }
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpFileMode_MissingFile_ReturnsError()
+    {
+        var model = new CommandModel
+        {
+            Type = CommandTypes.CSharp,
+            Content = "D:\\non_existent_file_12345.cs",
+            ScriptMode = ScriptModes.File
+        };
+
+        var result = await _executor.ExecuteCommandAsync(model);
+        Assert.That(result.ExitCode, Is.EqualTo(-1));
+        Assert.That(result.Error, Does.Contain("脚本文件不存在"));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpFileMode_MissingCsxFile_ReturnsNotSupportedError()
+    {
+        var model = new CommandModel
+        {
+            Type = CommandTypes.CSharp,
+            Content = "D:\\missing_script.csx",
+            ScriptMode = ScriptModes.File
+        };
+
+        var result = await _executor.ExecuteCommandAsync(model);
+        Assert.That(result.ExitCode, Is.EqualTo(-1));
+        Assert.That(result.Error, Does.Contain("dotnet run 不支持 .csx"));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_FileMode_PathWithSpacesWithoutQuotes_ResolvesCorrectly()
+    {
+        if (CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp) is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        var tempDir = Path.Combine(Path.GetTempPath(), $"dir space {Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        var tempFile = Path.Combine(tempDir, "script with space.cs");
+
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "using System; Console.WriteLine(\"space_path_ok\");", new System.Text.UTF8Encoding(false));
+            var model = new CommandModel
+            {
+                Type = CommandTypes.CSharp,
+                Content = tempFile, // 无双引号包裹且路径与文件名均包含空格
+                ScriptMode = ScriptModes.File
+            };
+
+            var result = await _executor.ExecuteCommandAsync(model);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Output, Does.Contain("space_path_ok"));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Test]
+    public void ParseCommandLineArgs_PreservesEmptyQuotesArgument()
+    {
+        var input = "arg1 \"\" arg2 \"hello world\"";
+        var parsed = CommandExecutor.ParseCommandLineArgs(input);
+
+        Assert.That(parsed, Has.Count.EqualTo(4));
+        Assert.That(parsed[0], Is.EqualTo("arg1"));
+        Assert.That(parsed[1], Is.EqualTo(string.Empty));
+        Assert.That(parsed[2], Is.EqualTo("arg2"));
+        Assert.That(parsed[3], Is.EqualTo("hello world"));
+    }
+
+    [Test]
+    public void ParseCommandLineArgs_HandlesEscapedQuotesAndJsonPayloadProperly()
+    {
+        var input = "--payload \"{\\\"name\\\": \\\"test\\\"}\" --flag \"literal \\\"quote\\\"\"";
+        var parsed = CommandExecutor.ParseCommandLineArgs(input);
+
+        Assert.That(parsed, Has.Count.EqualTo(4));
+        Assert.That(parsed[0], Is.EqualTo("--payload"));
+        Assert.That(parsed[1], Is.EqualTo("{\"name\": \"test\"}"));
+        Assert.That(parsed[2], Is.EqualTo("--flag"));
+        Assert.That(parsed[3], Is.EqualTo("literal \"quote\""));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_LegacyCommandWithoutScriptMode_ResolvesFileModeIfFileExists()
+    {
+        if (CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp) is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_legacy_{Guid.NewGuid():N}.cs");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "using System; Console.WriteLine(\"legacy_ok\");", new System.Text.UTF8Encoding(false));
+            var model = new CommandModel
+            {
+                Type = CommandTypes.CSharp,
+                Content = tempFile,
+                ScriptMode = null // 模拟历史未包含 ScriptMode 字段的任务
+            };
+
+            var result = await _executor.ExecuteCommandAsync(model);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Output, Does.Contain("legacy_ok"));
+        }
+        finally
+        {
+            try { File.Delete(tempFile); } catch { }
+        }
+    }
 }
