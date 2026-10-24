@@ -225,6 +225,90 @@ public class CommandExecutorTests
         var snapshotResult = TaskCreateCommand.ResolveInterpreterVersion(CommandTypes.PowerShell, snapshot, tools);
         Assert.That(snapshotResult, Is.EqualTo("pwsh"));
     }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpInlineScript_ExecutesAndCapturesOutput()
+    {
+        if (CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp) is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        var script = "using System; Console.WriteLine(\"csharp_test_ok_123\");";
+        var result = await _executor.ExecuteCommandAsync(script, CommandTypes.CSharp);
+
+        Assert.That(result.ExitCode, Is.EqualTo(0));
+        Assert.That(result.Output, Does.Contain("csharp_test_ok_123"));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpExitCode_CapturesNonZeroExitCode()
+    {
+        if (CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp) is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        var script = "return 33;";
+        var result = await _executor.ExecuteCommandAsync(script, CommandTypes.CSharp);
+
+        Assert.That(result.ExitCode, Is.EqualTo(33));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpPhysicalFile_ExecutesSuccessfully()
+    {
+        if (CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp) is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_physical_{Guid.NewGuid():N}.cs");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "using System; Console.WriteLine(\"physical_file_ok\");", new System.Text.UTF8Encoding(false));
+            var result = await _executor.ExecuteCommandAsync(tempFile, CommandTypes.CSharp);
+
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Output, Does.Contain("physical_file_ok"));
+        }
+        finally
+        {
+            try { File.Delete(tempFile); } catch { }
+        }
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpCsxFile_ReturnsNotSupportedError()
+    {
+        var result = await _executor.ExecuteCommandAsync("myscript.csx", CommandTypes.CSharp);
+
+        Assert.That(result.ExitCode, Is.EqualTo(-1));
+        Assert.That(result.Error, Does.Contain("dotnet run 不支持 .csx"));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpMissingScriptPath_ReturnsScriptNotFoundError()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), "non_existent_script_987654.cs");
+        var result = await _executor.ExecuteCommandAsync(missingPath, CommandTypes.CSharp);
+
+        Assert.That(result.ExitCode, Is.EqualTo(-1));
+        Assert.That(result.Error, Does.Contain("脚本文件不存在"));
+    }
+
+    [Test]
+    public async Task ExecuteCommandAsync_CSharpNonCsExistingFile_ReturnsNotSupportedError()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_other_{Guid.NewGuid():N}.txt");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "some text");
+            var result = await _executor.ExecuteCommandAsync(tempFile, CommandTypes.CSharp);
+
+            Assert.That(result.ExitCode, Is.EqualTo(-1));
+            Assert.That(result.Error, Does.Contain("C# 命令类型仅支持 .cs 脚本文件"));
+        }
+        finally
+        {
+            try { File.Delete(tempFile); } catch { }
+        }
+    }
+    // PowerShell test helper
     private static string? GetTestPowerShellExecutablePath()
     {
         if (OperatingSystem.IsWindows())

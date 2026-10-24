@@ -56,7 +56,7 @@ public sealed class TaskUpdateCommand(
         public string? CommandName { get; set; }
 
         [CommandOption("--cmd-type <TYPE>")]
-        [Description("更新命令类型（PowerShell, Python, Node.js, Bash, Cmd, VBScript）")]
+        [Description("更新命令类型（PowerShell, Python, Node.js, Bash, Cmd, VBScript, C#）")]
         public string? CommandType { get; set; }
 
         [CommandOption("--cmd <CONTENT>")]

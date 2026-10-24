@@ -67,7 +67,7 @@ public sealed class TaskCreateCommand(
         public string CommandName { get; set; } = "命令1";
 
         [CommandOption("--cmd-type <TYPE>")]
-        [Description("命令类型（PowerShell, Python, Node.js, Bash, Cmd, VBScript，默认 PowerShell）")]
+        [Description("命令类型（PowerShell, Python, Node.js, Bash, Cmd, VBScript, C#，默认 PowerShell）")]
         [DefaultValue("PowerShell")]
         public string CommandType { get; set; } = "PowerShell";
 

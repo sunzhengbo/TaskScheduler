@@ -31,7 +31,7 @@ public sealed class TaskTestRunCommand(
         public string Group { get; set; } = "DEFAULT";
 
         [CommandOption("-t|--type <TYPE>")]
-        [Description("命令类型（PowerShell, Python, Node.js, Bash, Cmd, VBScript，默认 PowerShell）")]
+        [Description("命令类型（PowerShell, Python, Node.js, Bash, Cmd, VBScript, C#，默认 PowerShell）")]
         public string? Type { get; set; }
 
         [CommandOption("-c|--cmd <CONTENT>")]

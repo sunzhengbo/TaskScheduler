@@ -23,7 +23,8 @@ public class InterpreterDetectionService(IEnumerable<IVersionManagerDetector>? d
         CommandTypes.NodeJs,
         CommandTypes.Shell,
         CommandTypes.Cmd,
-        CommandTypes.VBScript
+        CommandTypes.VBScript,
+        CommandTypes.CSharp
     };
 
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _detectLocks = new(
@@ -109,6 +110,9 @@ public class InterpreterDetectionService(IEnumerable<IVersionManagerDetector>? d
             case CommandTypes.VBScript:
                 candidates.Add("cscript.exe");
                 break;
+            case CommandTypes.CSharp:
+                candidates.Add(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+                break;
         }
 
         foreach (var name in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -163,6 +167,31 @@ public class InterpreterDetectionService(IEnumerable<IVersionManagerDetector>? d
                 {
                     if (File.Exists(cand)) return cand;
                 }
+            }
+            else if (string.Equals(commandType, CommandTypes.CSharp, StringComparison.OrdinalIgnoreCase))
+            {
+                var dotnetCandidates = new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "dotnet.exe")
+                };
+                foreach (var cand in dotnetCandidates)
+                {
+                    if (File.Exists(cand)) return cand;
+                }
+            }
+        }
+        else if (string.Equals(commandType, CommandTypes.CSharp, StringComparison.OrdinalIgnoreCase))
+        {
+            var unixDotnetCandidates = new[]
+            {
+                "/usr/share/dotnet/dotnet",
+                "/usr/local/share/dotnet/dotnet",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "dotnet")
+            };
+            foreach (var cand in unixDotnetCandidates)
+            {
+                if (File.Exists(cand)) return cand;
             }
         }
 

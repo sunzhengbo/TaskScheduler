@@ -69,6 +69,7 @@ public class ScoopDetector(Func<string, string?>? envGetter = null, string? root
             CommandTypes.PowerShell => [("pwsh", "pwsh")],
             CommandTypes.Python => [("python", "python")],
             CommandTypes.NodeJs => [("nodejs", "node"), ("nodejs-lts", "node")],
+            CommandTypes.CSharp => [("dotnet-sdk", "dotnet"), ("dotnet", "dotnet")],
             _ => []
         };
     }

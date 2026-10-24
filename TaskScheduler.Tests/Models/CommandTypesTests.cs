@@ -57,5 +57,37 @@ public class CommandTypesTests
         Assert.That(CommandTypes.Normalize("nodejs"), Is.EqualTo(CommandTypes.NodeJs));
         Assert.That(CommandTypes.Normalize("sh"), Is.EqualTo(CommandTypes.Shell));
         Assert.That(CommandTypes.Normalize("bat"), Is.EqualTo(CommandTypes.Cmd));
+        Assert.That(CommandTypes.Normalize("c#"), Is.EqualTo(CommandTypes.CSharp));
+        Assert.That(CommandTypes.Normalize("cs"), Is.EqualTo(CommandTypes.CSharp));
+        Assert.That(CommandTypes.Normalize("csharp"), Is.EqualTo(CommandTypes.CSharp));
+        Assert.That(CommandTypes.Normalize("dotnet"), Is.EqualTo(CommandTypes.CSharp));
+    }
+
+    [Test]
+    public void MapToToolType_MapsCSharpToDotNet()
+    {
+        Assert.That(CommandTypes.MapToToolType(CommandTypes.CSharp), Is.EqualTo("DotNet"));
+        Assert.That(CommandTypes.MapToToolType("csharp"), Is.EqualTo("DotNet"));
+        Assert.That(CommandTypes.MapToToolType("dotnet"), Is.EqualTo("DotNet"));
+        Assert.That(CommandTypes.MapToToolType(null), Is.Null);
+        Assert.That(CommandTypes.MapToToolType(""), Is.Null);
+    }
+
+    [Test]
+    public void GetAvailableCommandTypes_ContainsCSharp()
+    {
+        var types = CommandTypes.GetAvailableCommandTypes();
+        Assert.That(types, Does.Contain(CommandTypes.CSharp));
+    }
+
+    [Test]
+    public void DetectSystemInterpreterPath_FindsDotNetOnThisMachine()
+    {
+        var dotnetPath = CommandTypes.DetectSystemInterpreterPath(CommandTypes.CSharp);
+        if (dotnetPath is null)
+            Assert.Ignore("未检测到本地 .NET SDK，跳过此测试。");
+
+        TestContext.Out.WriteLine($"Detected dotnet Path: {dotnetPath}");
+        Assert.That(File.Exists(dotnetPath), Is.True);
     }
 }

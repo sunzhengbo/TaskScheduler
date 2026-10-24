@@ -12,7 +12,7 @@ public sealed class ToolListCommand(IToolConfigService toolService) : AsyncComma
     public sealed class Settings : GlobalCommandSettings
     {
         [CommandOption("-t|--type <TYPE>")]
-        [Description("按工具类型过滤（Python, PowerShell, Node.js, Bash）")]
+        [Description("按工具类型过滤（Python, PowerShell, Node.js, Bash, DotNet）")]
         public string? ToolType { get; set; }
     }
 
@@ -62,14 +62,16 @@ public sealed class ToolListCommand(IToolConfigService toolService) : AsyncComma
         return 0;
     }
 
-    internal static string NormalizeToolType(string input)
+    internal static string NormalizeToolType(string? input)
     {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
         return input.Trim().ToLowerInvariant() switch
         {
             "python" or "py" => "Python",
             "powershell" or "pwsh" or "ps" => "PowerShell",
             "node.js" or "nodejs" or "node" or "js" => "Node.js",
             "bash" or "sh" or "shell" => "Bash",
+            "dotnet" or "c#" or "cs" or "csharp" or ".net" => "DotNet",
             _ => input.Trim()
         };
     }

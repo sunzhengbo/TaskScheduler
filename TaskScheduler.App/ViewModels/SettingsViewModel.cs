@@ -114,7 +114,7 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _editToolIconColor = "#3776ab";
     [ObservableProperty] private AvaloniaList<ToolConfig> _editingVersions = new();
 
-    public AvaloniaList<string> ToolTypes { get; } = ["Python", "PowerShell", "Node.js", "Bash"];
+    public AvaloniaList<string> ToolTypes { get; } = ["Python", "PowerShell", "Node.js", "Bash", "DotNet"];
     public AvaloniaList<string> DatabaseTypes { get; } = ["SQLite"];
     public AvaloniaList<string> ThemeModes { get; } = ["System", "Light", "Dark"];
 
@@ -526,6 +526,7 @@ public partial class SettingsViewModel : ViewModelBase
         "PowerShell" => ("PS", "#3776ab"),
         "Node.js" => ("JS", "#3776ab"),
         "Shell" or "Shell / Bash" or "Bash" => ("Sh", "#3776ab"),
+        "DotNet" or "C#" => ("C#", "#512bd4"),
         "Ruby" => ("Rb", "#3776ab"),
         "Go" => ("Go", "#3776ab"),
         "Java" => ("Jv", "#3776ab"),

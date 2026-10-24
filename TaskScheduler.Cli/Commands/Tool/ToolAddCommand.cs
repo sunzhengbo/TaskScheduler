@@ -12,7 +12,7 @@ public sealed class ToolAddCommand(IToolConfigService toolService) : AsyncComman
     public sealed class Settings : GlobalCommandSettings
     {
         [CommandOption("-t|--type <TYPE>")]
-        [Description("工具类型（必填：Python, PowerShell, Node.js, Bash）")]
+        [Description("工具类型（必填：Python, PowerShell, Node.js, Bash, DotNet）")]
         public string ToolType { get; set; } = string.Empty;
 
         [CommandOption("-v|--version <NAME>")]

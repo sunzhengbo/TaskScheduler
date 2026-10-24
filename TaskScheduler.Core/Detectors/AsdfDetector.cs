@@ -84,6 +84,7 @@ public class AsdfDetector(Func<string, string?>? envGetter = null, string? rootD
             CommandTypes.Python => [("python", "python")],
             CommandTypes.NodeJs => [("nodejs", "node")],
             CommandTypes.PowerShell => [("powershell-core", "pwsh"), ("pwsh", "pwsh")],
+            CommandTypes.CSharp => [("dotnet-core", "dotnet")],
             _ => []
         };
     }

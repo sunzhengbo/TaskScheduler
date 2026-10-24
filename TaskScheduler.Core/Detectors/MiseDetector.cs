@@ -95,6 +95,7 @@ public class MiseDetector(Func<string, string?>? envGetter = null, string? rootD
             CommandTypes.PowerShell => ("powershell", "pwsh"),
             CommandTypes.Python => ("python", "python"),
             CommandTypes.NodeJs => ("node", "node"),
+            CommandTypes.CSharp => ("dotnet", "dotnet"),
             _ => (null, null)
         };
     }

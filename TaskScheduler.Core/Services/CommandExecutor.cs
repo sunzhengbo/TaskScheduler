@@ -25,6 +25,14 @@ public partial class CommandExecutor(
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
         var normalizedType = CommandTypes.Normalize(type);
 
+        // 对特定命令类型的参数进行快速预检（无需解释器参与，节省探测开销并提供精准错误反馈）
+        if (normalizedType == CommandTypes.CSharp)
+        {
+            var precheckResult = PrevalidateCSharpCommand(command);
+            if (precheckResult != null)
+                return precheckResult;
+        }
+
         var (resolvedExecutable, resolvedEnvVars) = await ResolveInterpreterAsync(
             normalizedType,
             interpreter,
@@ -38,6 +46,11 @@ public partial class CommandExecutor(
             if (!OperatingSystem.IsWindows())
                 return new CommandResult(-1, string.Empty, "VBScript is only supported on Windows.");
             return await ExecuteVBScriptAsync(command, resolvedExecutable, resolvedEnvVars, ct).ConfigureAwait(false);
+        }
+
+        if (normalizedType == CommandTypes.CSharp)
+        {
+            return await ExecuteCSharpAsync(command, resolvedExecutable, resolvedEnvVars, ct).ConfigureAwait(false);
         }
 
         var processStartInfo = new ProcessStartInfo
@@ -341,6 +354,160 @@ public partial class CommandExecutor(
         finally
         {
             try { File.Delete(tempFile); } catch (Exception ex) { logger.LogWarning(ex, "清理 VBScript 临时文件失败: {Path}", tempFile); }
+        }
+    }
+
+    /// <summary>
+    /// 对 C# 脚本命令入参进行纯参数校验（无解释器依赖）。
+    /// </summary>
+    private static CommandResult? PrevalidateCSharpCommand(string command)
+    {
+        var trimmed = command.Trim();
+        bool isSingleLine = !trimmed.Contains('\n') && !trimmed.Contains('\r');
+        if (!isSingleLine)
+            return null;
+
+        // 1. 若为单行且以 .csx 结尾，明确提示不支持并引导使用 .NET 10 .cs 格式
+        if (trimmed.EndsWith(".csx", StringComparison.OrdinalIgnoreCase))
+        {
+            return new CommandResult(-1, string.Empty, "dotnet run 不支持 .csx，请改用 .NET 10 基于文件的应用格式（.cs）。");
+        }
+
+        // 2. 若单行以 .cs 结尾，必然期望执行物理文件，若文件不存在则报错
+        if (trimmed.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(trimmed))
+            {
+                return new CommandResult(-1, string.Empty, $"脚本文件不存在: {trimmed}");
+            }
+            return null;
+        }
+
+        // 3. 若为单行且为本地已存在的文件，但扩展名非 .cs，明确提示不支持
+        if (File.Exists(trimmed))
+        {
+            return new CommandResult(-1, string.Empty, $"C# 命令类型仅支持 .cs 脚本文件，当前输入: {trimmed}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 执行 .NET 10 基于文件的应用（单文件 C# 脚本）。
+    /// 若输入为本地存在的 .cs 文件路径，则直接运行该物理文件（归一化为绝对路径）；
+    /// 若输入为代码文本，则以 UTF-8（无 BOM）保存至临时目录后通过 dotnet run 执行。
+    /// </summary>
+    private async Task<CommandResult> ExecuteCSharpAsync(
+        string command,
+        string interpreterPath,
+        string? envVariables,
+        CancellationToken ct)
+    {
+        var trimmed = command.Trim();
+        bool isSingleLine = !trimmed.Contains('\n') && !trimmed.Contains('\r');
+
+        string targetScriptPath;
+        bool isTempFile = false;
+
+        if (isSingleLine && trimmed.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(trimmed))
+        {
+            targetScriptPath = Path.GetFullPath(trimmed);
+        }
+        else
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "TaskScheduler", "scripts");
+            Directory.CreateDirectory(tempDir);
+            targetScriptPath = Path.Combine(tempDir, $"task_{Guid.NewGuid():N}.cs");
+            isTempFile = true;
+        }
+
+        try
+        {
+            if (isTempFile)
+            {
+                // 统一采用无 BOM UTF-8 保存（写入放在 try 内，确保中途失败或取消时 finally 能够清理残余文件）
+                await File.WriteAllTextAsync(targetScriptPath, command, new UTF8Encoding(false), ct).ConfigureAwait(false);
+            }
+
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = !string.IsNullOrWhiteSpace(interpreterPath)
+                    ? interpreterPath
+                    : (OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(targetScriptPath) ?? Environment.CurrentDirectory
+            };
+
+            processStartInfo.Environment["DOTNET_NOLOGO"] = "1";
+            processStartInfo.Environment["NO_COLOR"] = "1";
+            ApplyEnvironmentVariables(processStartInfo, envVariables);
+
+            processStartInfo.ArgumentList.Add("run");
+            processStartInfo.ArgumentList.Add("-v");
+            processStartInfo.ArgumentList.Add("quiet");
+            processStartInfo.ArgumentList.Add("--file");
+            processStartInfo.ArgumentList.Add(targetScriptPath);
+
+            using var process = new Process { StartInfo = processStartInfo };
+            if (!process.Start())
+                return new CommandResult(-1, string.Empty, "启动 dotnet 进程失败。");
+
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(ct);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(ct);
+
+            try
+            {
+                await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+                await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                throw;
+            }
+
+            var outputText = await outputTask.ConfigureAwait(false);
+            var errorText = await errorTask.ConfigureAwait(false);
+
+            logger.LogInformation("C# single-file script executed with exit code: {ExitCode}", process.ExitCode);
+
+            // 若退出码非 0 且检测到低版本 SDK 特征报错，提供友好诊断指引
+            bool isLowVersionSdk = process.ExitCode != 0 &&
+                ((errorText != null && (
+                    (errorText.Contains("--file", StringComparison.OrdinalIgnoreCase) && errorText.Contains("Unrecognized", StringComparison.OrdinalIgnoreCase)) ||
+                    errorText.Contains("NETSDK1045", StringComparison.OrdinalIgnoreCase))) ||
+                 (outputText != null && (
+                    (outputText.Contains("--file", StringComparison.OrdinalIgnoreCase) && outputText.Contains("Unrecognized", StringComparison.OrdinalIgnoreCase)) ||
+                    outputText.Contains("NETSDK1045", StringComparison.OrdinalIgnoreCase))));
+
+            if (isLowVersionSdk)
+            {
+                var tip = "\n\n[提示] 检测到当前使用的 dotnet SDK 可能未达到 .NET 10。" +
+                          "基于文件的单文件应用（File-based Apps）需要 .NET 10.0 及以上版本 SDK 支持，" +
+                          "请升级 .NET SDK 或通过命令配置全局工具：tscli tool add -t DotNet -n dotnet10 -p <路径> --default";
+                errorText = string.IsNullOrEmpty(errorText) ? tip.TrimStart() : errorText + tip;
+            }
+
+            return new CommandResult(process.ExitCode, outputText ?? string.Empty, errorText ?? string.Empty);
+        }
+        finally
+        {
+            if (isTempFile && File.Exists(targetScriptPath))
+            {
+                try
+                {
+                    File.Delete(targetScriptPath);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "清理 C# 临时文件失败: {Path}", targetScriptPath);
+                }
+            }
         }
     }
 

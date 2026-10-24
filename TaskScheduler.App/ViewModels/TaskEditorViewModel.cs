@@ -129,6 +129,17 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     partial void OnSelectedCommandTypeChanged(string value)
     {
         Command.Type = value;
+        if (string.IsNullOrWhiteSpace(Command.Content))
+        {
+            var normalized = CommandTypes.Normalize(value);
+            if (normalized == CommandTypes.CSharp)
+            {
+                Command.Content = "// .NET 10 基于文件的应用 (File-based App)\n" +
+                                  "// 提示：支持通过指令直接引用 NuGet 包，如：#:package Humanizer@2.14.1\n" +
+                                  "using System;\n\n" +
+                                  "Console.WriteLine($\"Hello from C# Task! Current time: {DateTime.Now}\");\n";
+            }
+        }
         UpdateInterpreterVersions();
     }
 

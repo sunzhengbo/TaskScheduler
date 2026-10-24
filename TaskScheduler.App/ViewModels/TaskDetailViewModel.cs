@@ -250,13 +250,14 @@ public partial class TaskDetailViewModel : ViewModelBase, IParameterReceiver
         var topLevel = GetTopLevel();
         if (topLevel == null) return;
 
-        var ext = Command.Type switch
+        var ext = CommandTypes.Normalize(Command.Type) switch
         {
-            "PowerShell" => ".ps1",
-            "Python 脚本" => ".py",
-            "Shell 脚本" => ".sh",
-            "Node.js 脚本" => ".js",
-            "VBScript" => ".vbs",
+            CommandTypes.PowerShell => ".ps1",
+            CommandTypes.Python => ".py",
+            CommandTypes.Shell => ".sh",
+            CommandTypes.NodeJs => ".js",
+            CommandTypes.VBScript => ".vbs",
+            CommandTypes.CSharp => ".cs",
             _ => ".bat"
         };
 
