@@ -10,7 +10,8 @@ namespace TaskScheduler.Cli.Commands.Task;
 
 public sealed class TaskViewCommand(
     ITaskSchedulerService taskService,
-    IExecutionLogService logService) : AsyncCommand<TaskViewCommand.Settings>
+    IExecutionLogService logService,
+    IToolConfigService? toolConfigService = null) : AsyncCommand<TaskViewCommand.Settings>
 {
     public sealed class Settings : GlobalCommandSettings
     {
@@ -114,7 +115,8 @@ public sealed class TaskViewCommand(
                 .AddColumn();
             cmdGrid.AddRow("[grey]命令名称:[/]", Markup.Escape(command.Name));
             cmdGrid.AddRow("[grey]命令类型:[/]", $"[cyan]{Markup.Escape(command.Type)}[/]");
-            cmdGrid.AddRow("[grey]解释器配置:[/]", Markup.Escape(command.InterpreterVersion ?? CommandTypes.DetectBuiltInInterpreterPath(command.Type) ?? "系统默认 (PATH)"));
+            var interpreterDisplay = await FormatInterpreterDisplayAsync(command, cancellationToken);
+            cmdGrid.AddRow("[grey]解释器配置:[/]", interpreterDisplay);
             cmdGrid.AddRow("[grey]脚本内容:[/]", $"[white]{Markup.Escape(command.Content)}[/]");
 
             var cmdPanel = new Panel(cmdGrid)
@@ -177,5 +179,56 @@ public sealed class TaskViewCommand(
 
         AnsiConsole.Write(logTable);
         return 0;
+    }
+
+    private async Task<string> FormatInterpreterDisplayAsync(CommandModel command, CancellationToken ct)
+    {
+        var rawVersion = command.InterpreterVersion;
+        var toolType = CommandTypes.MapToToolType(command.Type);
+
+        if (toolType == null)
+        {
+            return Markup.Escape(rawVersion ?? CommandTypes.DetectBuiltInInterpreterPath(command.Type) ?? "系统默认 (PATH)");
+        }
+
+        IReadOnlyList<ToolConfig>? tools = null;
+        if (toolConfigService != null)
+        {
+            try
+            {
+                tools = await toolConfigService.GetToolsByTypeAsync(toolType, ct);
+            }
+            catch
+            {
+                // 忽略异常
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(rawVersion))
+        {
+            var defTool = tools?.FirstOrDefault(t => t.IsDefault) ?? tools?.FirstOrDefault();
+            if (defTool != null)
+            {
+                return $"[grey]未指定 (自动使用全局默认: {Markup.Escape(defTool.VersionName)})[/]";
+            }
+            return "[grey]系统默认 (PATH)[/]";
+        }
+
+        var candidateName = command.InterpreterName ?? rawVersion.Trim();
+        var matched = tools?.FirstOrDefault(t => t.VersionName.Equals(candidateName, StringComparison.OrdinalIgnoreCase));
+
+        if (matched != null)
+        {
+            return $"[green]{Markup.Escape(candidateName)}[/] [grey]({Markup.Escape(matched.ExecutablePath)})[/]";
+        }
+
+        // 未在工具库中注册
+        var defaultTool = tools?.FirstOrDefault(t => t.IsDefault) ?? tools?.FirstOrDefault();
+        if (defaultTool != null)
+        {
+            return $"[yellow]{Markup.Escape(rawVersion)}[/] [bold yellow](⚠️ 未在工具库中注册，运行时将自动回退到默认: {Markup.Escape(defaultTool.VersionName)})[/]";
+        }
+
+        return $"[yellow]{Markup.Escape(rawVersion)}[/] [bold yellow](⚠️ 工具库未配置该语言工具，运行时将从系统 PATH 查找)[/]";
     }
 }

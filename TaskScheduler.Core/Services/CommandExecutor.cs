@@ -119,7 +119,7 @@ public partial class CommandExecutor(
 
     /// <summary>
     /// 解析目标解释器的真实可执行文件路径与关联环境变量。
-    /// 优先级：版本名称动态匹配 -> 候选有效路径校验 -> 同名文件迁移匹配 -> 默认工具配置 -> 系统 PATH 查找 -> 系统内置默认回退。
+    /// 优先级：版本名称动态匹配 -> 工具库默认工具自愈回退 -> 候选有效路径校验 -> 同名文件迁移匹配 -> 默认工具配置 -> 系统 PATH 查找 -> 系统内置默认回退。
     /// </summary>
     private async Task<(string ExecutablePath, string? EnvVariables)> ResolveInterpreterAsync(
         string normalizedType,
@@ -177,9 +177,24 @@ public partial class CommandExecutor(
                     logger.LogWarning("解释器 '{VersionName}' 在工具库中配置的路径不存在: {Path}，尝试容错查找...", matchedByName.VersionName, matchedByName.ExecutablePath);
                 }
             }
+
+            // 2. 若任务指定了版本名称（或包含在历史快照中），但该版本在当前工具库中已不存在：
+            // 只要工具库已配置该语言的工具，优先自愈回退到该语言的默认工具，避免被历史快照残留的物理路径绑架
+            if (!string.IsNullOrWhiteSpace(candidateName) && tools.Count > 0)
+            {
+                var defaultTool = tools.FirstOrDefault(t => t.IsDefault && File.Exists(t.ExecutablePath)) ??
+                                  tools.FirstOrDefault(t => File.Exists(t.ExecutablePath));
+                if (defaultTool != null)
+                {
+                    logger.LogWarning("任务配置的解释器版本 '{CandidateName}' 未在工具库中找到有效项，自动回退到工具库默认工具 '{VersionName}': {Path}",
+                        candidateName, defaultTool.VersionName, defaultTool.ExecutablePath);
+                    resolvedEnvVars ??= defaultTool.EnvVariables;
+                    return (defaultTool.ExecutablePath, resolvedEnvVars);
+                }
+            }
         }
 
-        // 2. 检查候选文件路径是否在本地有效存在（无论是通过绝对路径传入还是由名称推导，不受 toolConfigService 限制）
+        // 3. 检查候选文件路径是否在本地有效存在（纯绝对路径传入，或工具库未接管时的快照回退）
         if (!string.IsNullOrWhiteSpace(candidatePath) && File.Exists(candidatePath))
         {
             if (tools != null)
@@ -190,7 +205,7 @@ public partial class CommandExecutor(
             return (candidatePath, resolvedEnvVars);
         }
 
-        // 3. 原路径失效时，按可执行文件名在工具库中寻找可用的替代工具
+        // 4. 原路径失效时，按可执行文件名在工具库中寻找可用的替代工具
         if (!string.IsNullOrWhiteSpace(candidatePath) && tools != null && tools.Count > 0)
         {
             string? exeFileName = null;
@@ -218,7 +233,7 @@ public partial class CommandExecutor(
             }
         }
 
-        // 4. 回退到该语言类型的默认工具配置
+        // 5. 回退到该语言类型的默认工具配置
         if (tools != null && tools.Count > 0)
         {
             var defaultTool = tools.FirstOrDefault(t => t.IsDefault && File.Exists(t.ExecutablePath)) ??
@@ -232,7 +247,7 @@ public partial class CommandExecutor(
             }
         }
 
-        // 5. 从系统环境变量 PATH 中查找
+        // 6. 从系统环境变量 PATH 中查找
         var foundInPath = FindInPath(normalizedType, candidateName, candidatePath);
         if (foundInPath != null)
         {
@@ -240,7 +255,7 @@ public partial class CommandExecutor(
             return (foundInPath, resolvedEnvVars);
         }
 
-        // 6. 最终内置默认命令名回退
+        // 7. 最终内置默认命令名回退
         var fallback = normalizedType switch
         {
             CommandTypes.PowerShell => ResolveDefaultPowerShellExecutable(),

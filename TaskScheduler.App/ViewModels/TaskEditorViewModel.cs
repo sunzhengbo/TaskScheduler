@@ -116,6 +116,9 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         SetTriggerTypeFlags(TriggerType.Cron);
         TestOutput = string.Empty;
         ValidationMessage = null;
+        _originalInterpreterName = null;
+        InterpreterWarningMessage = null;
+        HasInterpreterWarning = false;
         Command = new CommandModel { Name = "命令1", Type = CommandTypes.PowerShell };
         Command.PropertyChanged += OnCommandModelPropertyChanged;
         SelectedCommandType = CommandTypes.PowerShell;
@@ -133,6 +136,9 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private string _selectedCommandType = CommandTypes.PowerShell;
     [ObservableProperty] private string? _effectiveInterpreterPath;
     [ObservableProperty] private string? _builtInInterpreterPath;
+    [ObservableProperty] private string? _interpreterWarningMessage;
+    [ObservableProperty] private bool _hasInterpreterWarning;
+    private string? _originalInterpreterName;
 
     public AvaloniaList<string> AvailableGroups { get; } = ["DEFAULT", "SYSTEM", "USER", "DAEMON"];
     public AvaloniaList<TaskPriority> AvailablePriorities { get; } = [TaskPriority.Low, TaskPriority.Normal, TaskPriority.High];
@@ -219,6 +225,12 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         if (e.PropertyName == nameof(CommandModel.InterpreterVersion))
         {
             UpdateEffectiveInterpreterPath();
+            if (AvailableInterpreterVersions.Contains(Command.InterpreterVersion ?? string.Empty) &&
+                !string.Equals(Command.InterpreterVersion, _originalInterpreterName, StringComparison.OrdinalIgnoreCase))
+            {
+                InterpreterWarningMessage = null;
+                HasInterpreterWarning = false;
+            }
         }
     }
 
@@ -235,6 +247,8 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
             BuiltInInterpreterPath = EffectiveInterpreterPath;
             Command.InterpreterVersion = null;
+            InterpreterWarningMessage = null;
+            HasInterpreterWarning = false;
             return;
         }
 
@@ -250,18 +264,32 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             AvailableInterpreterVersions = new AvaloniaList<string>(versions);
 
             // 获取当前任务保存的纯净版本名（兼容历史 "pwsh (C:\path)" 格式与纯名称格式）
-            var currentName = Command.InterpreterName ?? Command.InterpreterVersion;
+            var currentName = Command.InterpreterName ?? Command.InterpreterVersion ?? _originalInterpreterName;
             var matched = versions.FirstOrDefault(v => v.Equals(currentName, StringComparison.OrdinalIgnoreCase));
 
             if (matched != null)
             {
                 Command.InterpreterVersion = matched;
+                InterpreterWarningMessage = null;
+                HasInterpreterWarning = false;
             }
             else
             {
                 // 若当前未匹配到可用版本，优先选用该工具类型的默认版本，其次选用第一个版本
                 var defaultTool = matchingTools.FirstOrDefault(t => t.IsDefault) ?? matchingTools[0];
                 Command.InterpreterVersion = defaultTool.VersionName;
+
+                var originalSpec = _originalInterpreterName ?? currentName;
+                if (IsEditMode && !string.IsNullOrWhiteSpace(originalSpec))
+                {
+                    InterpreterWarningMessage = $"原配置的解释器版本「{originalSpec}」在全局工具库中未找到（已被重命名或删除）。当前已为您推荐全局默认工具「{defaultTool.VersionName}」，请确认并保存任务以生效。";
+                    HasInterpreterWarning = true;
+                }
+                else
+                {
+                    InterpreterWarningMessage = null;
+                    HasInterpreterWarning = false;
+                }
             }
 
             UpdateEffectiveInterpreterPath();
@@ -278,6 +306,17 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             AvailableInterpreterVersions = [];
             EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
             BuiltInInterpreterPath = EffectiveInterpreterPath;
+            var originalSpec = _originalInterpreterName ?? Command.InterpreterName ?? Command.InterpreterVersion;
+            if (IsEditMode && !string.IsNullOrWhiteSpace(originalSpec))
+            {
+                InterpreterWarningMessage = $"全局工具库中未配置任何「{toolType}」解释器（原指定「{originalSpec}」）。当前回退至系统环境变量路径。";
+                HasInterpreterWarning = true;
+            }
+            else
+            {
+                InterpreterWarningMessage = null;
+                HasInterpreterWarning = false;
+            }
             Command.InterpreterVersion = null;
         }
     }
@@ -355,6 +394,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                 var cmd = CommandModel.DeserializeFromJson(task.CommandJson);
                 if (cmd != null)
                 {
+                    _originalInterpreterName = cmd.InterpreterName ?? cmd.InterpreterVersion;
                     Command = cmd;
                     SelectedCommandType = cmd.Type;
                 }

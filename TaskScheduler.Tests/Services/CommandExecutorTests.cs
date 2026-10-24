@@ -107,6 +107,34 @@ public class CommandExecutorTests
     }
 
     [Test]
+    public async Task ExecuteCommandAsync_WithObsoleteVersionNameInSnapshot_FallsBackToDefaultToolInsteadOfSnapshotPath()
+    {
+        var actualPath = GetTestPowerShellExecutablePath();
+        if (actualPath == null || !File.Exists(actualPath))
+            Assert.Ignore("PowerShell executable not found.");
+
+        await _toolService.AddToolAsync(new ToolConfig
+        {
+            ToolType = CommandTypes.PowerShell,
+            VersionName = "pwshDefault",
+            ExecutablePath = actualPath,
+            IsDefault = true
+        });
+
+        // 模拟存量任务配置了历史快照 "Powershell5.1 (C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe)"
+        // 工具库中只有 pwshDefault（默认工具），无 Powershell5.1
+        // 即使快照里的旧路径在磁盘上实际存在，也必须优先自愈回退到工具库默认工具 pwshDefault
+        var obsoleteSnapshotWithExistingDiskPath = @"Powershell5.1 (C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe)";
+        var result = await _executor.ExecuteCommandAsync(
+            "Write-Output 'fallback_to_default_tool'",
+            CommandTypes.PowerShell,
+            interpreter: obsoleteSnapshotWithExistingDiskPath);
+
+        Assert.That(result.ExitCode, Is.EqualTo(0));
+        Assert.That(result.Output, Does.Contain("fallback_to_default_tool"));
+    }
+
+    [Test]
     public async Task ExecuteCommandAsync_WithInvalidPathAndNoToolConfig_FallsBackToSystemPath()
     {
         // 传递一个不存在的路径且库中无对应工具，验证容错回退到系统 PATH 解释器

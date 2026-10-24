@@ -168,6 +168,18 @@
                             <ComboBox ItemsSource="{Binding AvailableInterpreterVersions}"
                                       SelectedItem="{Binding Command.InterpreterVersion}"
                                       HorizontalAlignment="Stretch" />
+                            <Border Background="#20E6A23C" BorderBrush="#80E6A23C" BorderThickness="1"
+                                    CornerRadius="6" Padding="10,8" Margin="0,4,0,0"
+                                    IsVisible="{Binding HasInterpreterWarning}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="⚠️" FontSize="14" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="解释器配置提示" FontSize="12" FontWeight="SemiBold" Foreground="#E6A23C" />
+                                        <TextBlock Text="{Binding InterpreterWarningMessage}"
+                                                   FontSize="11" Foreground="#E6A23C" TextWrapping="Wrap" LineHeight="16" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </StackPanel>
                         <StackPanel Spacing="4"
                                     IsVisible="{Binding EffectiveInterpreterPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
