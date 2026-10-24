@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
+
+using TaskScheduler.Core.Detectors;
 using TaskScheduler.Core.Jobs;
 using TaskScheduler.Core.Services;
 
@@ -40,6 +42,18 @@ public static class ServiceCollectionExtensions
             var factory = sp.GetRequiredService<ISchedulerFactory>();
             return Task.Run(() => factory.GetScheduler()).GetAwaiter().GetResult();
         });
+
+        // 注册多版本管理工具探测器策略集合
+        services.AddSingleton<IVersionManagerDetector, MiseDetector>();
+        services.AddSingleton<IVersionManagerDetector, ScoopDetector>();
+        services.AddSingleton<IVersionManagerDetector, UvDetector>();
+        services.AddSingleton<IVersionManagerDetector, AsdfDetector>();
+        services.AddSingleton<IVersionManagerDetector, NvmDetector>();
+        services.AddSingleton<IVersionManagerDetector, FnmDetector>();
+        services.AddSingleton<IVersionManagerDetector, VoltaDetector>();
+
+        // 注册解释器环境探测聚合服务
+        services.AddSingleton<IInterpreterDetectionService, InterpreterDetectionService>();
 
         services.AddSingleton<IIpcSyncService, IpcSyncService>();
         services.AddSingleton<ICommandExecutor, CommandExecutor>();

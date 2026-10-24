@@ -1,9 +1,12 @@
 using System.ComponentModel;
 using System.Diagnostics;
+
 using Spectre.Console;
 using Spectre.Console.Cli;
+
 using TaskScheduler.Cli.Formatting;
 using TaskScheduler.Cli.Infrastructure;
+using TaskScheduler.Core.Detectors;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
 
@@ -12,8 +15,10 @@ namespace TaskScheduler.Cli.Commands.Task;
 public sealed class TaskTestRunCommand(
     ICommandExecutor commandExecutor,
     ITaskSchedulerService taskService,
-    IToolConfigService toolService) : AsyncCommand<TaskTestRunCommand.Settings>
+    IToolConfigService toolService,
+    IInterpreterDetectionService? detectionService = null) : AsyncCommand<TaskTestRunCommand.Settings>
 {
+    private readonly IInterpreterDetectionService _detectionService = detectionService ?? InterpreterDetectionService.Default;
     public sealed class Settings : GlobalCommandSettings
     {
         [CommandOption("-n|--name <TASK_NAME>")]
@@ -111,7 +116,7 @@ public sealed class TaskTestRunCommand(
                 CliOutputFormatter.WriteJson(new
                 {
                     type = cmdType,
-                    interpreterPath = interpreterPath ?? CommandTypes.DetectBuiltInInterpreterPath(cmdType),
+                    interpreterPath = interpreterPath ?? await _detectionService.DetectAsync(cmdType, ct: cancellationToken),
                     result.ExitCode,
                     durationMs = sw.ElapsedMilliseconds,
                     result.Output,

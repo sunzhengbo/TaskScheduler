@@ -2,14 +2,19 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+
+using TaskScheduler.Core.Detectors;
 using TaskScheduler.Core.Models;
 
 namespace TaskScheduler.Core.Services;
 
 public partial class CommandExecutor(
     ILogger<CommandExecutor> logger,
-    IToolConfigService? toolConfigService = null) : ICommandExecutor
+    IToolConfigService? toolConfigService = null,
+    IInterpreterDetectionService? detectionService = null) : ICommandExecutor
 {
+    private readonly IInterpreterDetectionService _detectionService = detectionService ?? InterpreterDetectionService.Default;
+
     public async Task<CommandResult> ExecuteCommandAsync(
         string command,
         string type,
@@ -119,7 +124,12 @@ public partial class CommandExecutor(
 
     /// <summary>
     /// 解析目标解释器的真实可执行文件路径与关联环境变量。
-    /// 优先级：版本名称动态匹配 -> 工具库默认工具自愈回退 -> 候选有效路径校验 -> 同名文件迁移匹配 -> 默认工具配置 -> 系统 PATH 查找 -> 系统内置默认回退。
+    /// 严格遵循三级正交模型：
+    /// 0. 用户显式传入真实物理绝对路径（直接采纳，最高优先级，反查工具库合并环境变量）
+    /// 1. 工具表查询（版本名精准匹配 -> 脱落自愈回退默认工具 -> 快照残留路径兜底）
+    /// 2. 系统 PATH 两段式查找（用户候选名 -> 内置候选名 -> Windows PowerShell 特例）
+    /// 3. 版本管理器探测器轮询（mise -> scoop -> uv -> asdf -> nvm -> fnm -> volta，带 5 分钟 TTL 缓存）
+    /// 终点: 明确抛出带有三级诊断排查摘要的 FileNotFoundException
     /// </summary>
     private async Task<(string ExecutablePath, string? EnvVariables)> ResolveInterpreterAsync(
         string normalizedType,
@@ -127,161 +137,107 @@ public partial class CommandExecutor(
         string? explicitEnvVars,
         CancellationToken ct)
     {
-        string? candidateName = null;
-        string? candidatePath = null;
+        var resolvedEnvVars = explicitEnvVars;
+        var toolType = CommandTypes.MapToToolType(normalizedType);
+
+        // =========================================================================
+        // 0. 输入语义统一提取
+        // =========================================================================
+        string? snapshotName = null;
+        string? snapshotPath = null;
+        bool isExplicitRawPath = false;
 
         if (!string.IsNullOrWhiteSpace(interpreterInput))
         {
-            var match = InterpreterSnapshotRegex().Match(interpreterInput.Trim());
+            var trimmed = interpreterInput.Trim();
+            var match = InterpreterSnapshotRegex().Match(trimmed);
             if (match.Success)
             {
-                candidateName = match.Groups[1].Value.Trim();
-                candidatePath = match.Groups[2].Value.Trim();
+                snapshotName = match.Groups[1].Value.Trim();
+                snapshotPath = match.Groups[2].Value.Trim();
+            }
+            else if (Path.IsPathRooted(trimmed) || trimmed.Contains('/') || trimmed.Contains('\\'))
+            {
+                snapshotPath = trimmed;
+                if (File.Exists(trimmed))
+                {
+                    isExplicitRawPath = true;
+                }
             }
             else
             {
-                if (interpreterInput.Contains('/') || interpreterInput.Contains('\\') ||
-
-                    File.Exists(interpreterInput))
-                {
-                    candidatePath = interpreterInput.Trim();
-                }
-                else
-                {
-                    candidateName = interpreterInput.Trim();
-                }
+                snapshotName = trimmed;
             }
         }
 
-        var resolvedEnvVars = explicitEnvVars;
-        var toolType = CommandTypes.MapToToolType(normalizedType);
-        IReadOnlyList<ToolConfig>? tools = null;
+        // 0.1 用户显式指定的现有裸物理路径：采纳并合并工具库环境变量（响应 Review v3 备注 C）
+        if (isExplicitRawPath && !string.IsNullOrWhiteSpace(snapshotPath))
+        {
+            if (toolConfigService != null && toolType != null)
+            {
+                var rawTools = await toolConfigService.GetToolsByTypeAsync(toolType, ct).ConfigureAwait(false);
+                var matchedByPath = rawTools.FirstOrDefault(t => t.ExecutablePath.Equals(snapshotPath, StringComparison.OrdinalIgnoreCase));
+                resolvedEnvVars ??= matchedByPath?.EnvVariables;
+            }
+            return (snapshotPath, resolvedEnvVars);
+        }
 
+        // =========================================================================
+        // 第 1 级: 用户工具表 (ToolConfig) - 最高托管权威
+        // =========================================================================
+        IReadOnlyList<ToolConfig>? tools = null;
         if (toolConfigService != null && toolType != null)
         {
             tools = await toolConfigService.GetToolsByTypeAsync(toolType, ct).ConfigureAwait(false);
-
-            // 1. 优先根据解释器名称从工具库匹配最新配置的路径
-            if (!string.IsNullOrWhiteSpace(candidateName) && tools.Count > 0)
+            if (tools.Count > 0)
             {
-                var matchedByName = tools.FirstOrDefault(t => t.VersionName.Equals(candidateName, StringComparison.OrdinalIgnoreCase));
-                if (matchedByName != null)
+                // 1.1 精准匹配指定的版本名
+                if (!string.IsNullOrWhiteSpace(snapshotName))
                 {
-                    resolvedEnvVars ??= matchedByName.EnvVariables;
-                    if (File.Exists(matchedByName.ExecutablePath))
+                    var matchedByName = tools.FirstOrDefault(t => t.VersionName.Equals(snapshotName, StringComparison.OrdinalIgnoreCase));
+                    if (matchedByName != null && File.Exists(matchedByName.ExecutablePath))
                     {
-                        logger.LogInformation("根据解释器名称 '{VersionName}' 动态解析到有效路径: {Path}", matchedByName.VersionName, matchedByName.ExecutablePath);
+                        resolvedEnvVars ??= matchedByName.EnvVariables;
                         return (matchedByName.ExecutablePath, resolvedEnvVars);
                     }
-
-                    logger.LogWarning("解释器 '{VersionName}' 在工具库中配置的路径不存在: {Path}，尝试容错查找...", matchedByName.VersionName, matchedByName.ExecutablePath);
                 }
-            }
 
-            // 2. 若任务指定了版本名称（或包含在历史快照中），但该版本在当前工具库中已不存在：
-            // 只要工具库已配置该语言的工具，优先自愈回退到该语言的默认工具，避免被历史快照残留的物理路径绑架
-            if (!string.IsNullOrWhiteSpace(candidateName) && tools.Count > 0)
-            {
+                // 1.2 版本名脱落或未指定 -> 坚决回退到默认工具（自愈回退，防旧死路径强占）
                 var defaultTool = tools.FirstOrDefault(t => t.IsDefault && File.Exists(t.ExecutablePath)) ??
                                   tools.FirstOrDefault(t => File.Exists(t.ExecutablePath));
                 if (defaultTool != null)
                 {
-                    logger.LogWarning("任务配置的解释器版本 '{CandidateName}' 未在工具库中找到有效项，自动回退到工具库默认工具 '{VersionName}': {Path}",
-                        candidateName, defaultTool.VersionName, defaultTool.ExecutablePath);
+                    if (!string.IsNullOrWhiteSpace(snapshotName))
+                    {
+                        logger.LogWarning("解释器版本 '{SnapshotName}' 在工具库中已失效，自愈回退到默认工具 '{DefaultName}': {Path}",
+                            snapshotName, defaultTool.VersionName, defaultTool.ExecutablePath);
+                    }
                     resolvedEnvVars ??= defaultTool.EnvVariables;
                     return (defaultTool.ExecutablePath, resolvedEnvVars);
                 }
             }
         }
 
-        // 3. 检查候选文件路径是否在本地有效存在（纯绝对路径传入，或工具库未接管时的快照回退）
-        if (!string.IsNullOrWhiteSpace(candidatePath) && File.Exists(candidatePath))
+        // 1.3 工具库无任何有效工具时的快照残留路径兜底
+        if (!string.IsNullOrWhiteSpace(snapshotPath) && File.Exists(snapshotPath))
         {
-            if (tools != null)
-            {
-                var matchedByPath = tools.FirstOrDefault(t => t.ExecutablePath.Equals(candidatePath, StringComparison.OrdinalIgnoreCase));
-                resolvedEnvVars ??= matchedByPath?.EnvVariables;
-            }
-            return (candidatePath, resolvedEnvVars);
+            logger.LogInformation("工具库无有效配置，沿用历史快照有效物理路径: {Path}", snapshotPath);
+            return (snapshotPath, resolvedEnvVars);
         }
 
-        // 4. 原路径失效时，按可执行文件名在工具库中寻找可用的替代工具
-        if (!string.IsNullOrWhiteSpace(candidatePath) && tools != null && tools.Count > 0)
+        // =========================================================================
+        // 第 2 级 & 第 3 级: 聚合环境探测服务 (PATH 两段式 + 版本管理器轮询)
+        // =========================================================================
+        string? candidateCustom = null;
+        if (!string.IsNullOrWhiteSpace(snapshotName))
         {
-            string? exeFileName = null;
-            try
-            {
-                exeFileName = Path.GetFileName(candidatePath);
-            }
-            catch
-            {
-                // 忽略包含非法路径字符的输入
-            }
-
-            if (!string.IsNullOrWhiteSpace(exeFileName))
-            {
-                var matchedByFileName = tools.FirstOrDefault(t =>
-                    Path.GetFileName(t.ExecutablePath).Equals(exeFileName, StringComparison.OrdinalIgnoreCase) &&
-                    File.Exists(t.ExecutablePath));
-                if (matchedByFileName != null)
-                {
-                    logger.LogWarning("原解释器路径 '{OldPath}' 不存在，自动迁移至工具库同名解释器 '{VersionName}': {NewPath}",
-                        candidatePath, matchedByFileName.VersionName, matchedByFileName.ExecutablePath);
-                    resolvedEnvVars ??= matchedByFileName.EnvVariables;
-                    return (matchedByFileName.ExecutablePath, resolvedEnvVars);
-                }
-            }
+            candidateCustom = snapshotName;
         }
-
-        // 5. 回退到该语言类型的默认工具配置
-        if (tools != null && tools.Count > 0)
-        {
-            var defaultTool = tools.FirstOrDefault(t => t.IsDefault && File.Exists(t.ExecutablePath)) ??
-                              tools.FirstOrDefault(t => File.Exists(t.ExecutablePath));
-            if (defaultTool != null)
-            {
-                logger.LogWarning("未找到指定的有效解释器 '{Input}'，自动回退到默认工具 '{VersionName}': {Path}",
-                    interpreterInput, defaultTool.VersionName, defaultTool.ExecutablePath);
-                resolvedEnvVars ??= defaultTool.EnvVariables;
-                return (defaultTool.ExecutablePath, resolvedEnvVars);
-            }
-        }
-
-        // 6. 从系统环境变量 PATH 中查找
-        var foundInPath = FindInPath(normalizedType, candidateName, candidatePath);
-        if (foundInPath != null)
-        {
-            logger.LogInformation("通过系统环境变量 PATH 找到可用解释器: {Path}", foundInPath);
-            return (foundInPath, resolvedEnvVars);
-        }
-
-        // 7. 最终内置默认命令名回退
-        var fallback = normalizedType switch
-        {
-            CommandTypes.PowerShell => ResolveDefaultPowerShellExecutable(),
-            CommandTypes.Python => "python",
-            CommandTypes.NodeJs => "node",
-            CommandTypes.Shell => "bash",
-            CommandTypes.Cmd => "cmd.exe",
-            CommandTypes.VBScript => "cscript.exe",
-            _ => !string.IsNullOrWhiteSpace(candidatePath) ? candidatePath : (candidateName ?? string.Empty)
-        };
-
-        return (fallback, resolvedEnvVars);
-    }
-
-    private static string? FindInPath(string normalizedType, string? candidateName, string? candidatePath)
-    {
-        var candidates = new List<string>();
-        if (!string.IsNullOrWhiteSpace(candidateName))
-        {
-            candidates.Add(candidateName);
-        }
-        if (!string.IsNullOrWhiteSpace(candidatePath))
+        else if (!string.IsNullOrWhiteSpace(snapshotPath))
         {
             try
             {
-                candidates.Add(Path.GetFileName(candidatePath));
+                candidateCustom = Path.GetFileName(snapshotPath);
             }
             catch
             {
@@ -289,77 +245,28 @@ public partial class CommandExecutor(
             }
         }
 
-        switch (normalizedType)
+        var detectedPath = await _detectionService.DetectAsync(normalizedType, candidateCustom, ct).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(detectedPath) && File.Exists(detectedPath))
         {
-            case CommandTypes.PowerShell:
-                candidates.Add("pwsh.exe");
-                candidates.Add("pwsh");
-                candidates.Add("powershell.exe");
-                break;
-            case CommandTypes.Python:
-                candidates.Add("python.exe");
-                candidates.Add("python3.exe");
-                candidates.Add("python");
-                break;
-            case CommandTypes.NodeJs:
-                candidates.Add("node.exe");
-                candidates.Add("node");
-                break;
-            case CommandTypes.Shell:
-                candidates.Add("bash.exe");
-                candidates.Add("bash");
-                candidates.Add("sh.exe");
-                candidates.Add("sh");
-                break;
-            case CommandTypes.Cmd:
-                candidates.Add("cmd.exe");
-                break;
-            case CommandTypes.VBScript:
-                candidates.Add("cscript.exe");
-                break;
+            logger.LogInformation("环境探测命中解释器: {Path}", detectedPath);
+            return (detectedPath, resolvedEnvVars);
         }
 
-        foreach (var name in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var found = SearchPathEnvironment(name);
-            if (found != null)
-                return found;
-        }
+        // =========================================================================
+        // 终点: 明确失败，抛出带有排查诊断摘要的友好异常
+        // =========================================================================
+        var diagInfo = new StringBuilder();
+        diagInfo.AppendLine($"未检测到「{normalizedType}」可用解释器。");
+        diagInfo.AppendLine("排查诊断摘要：");
+        diagInfo.AppendLine($"  - [第 1 级 工具库]：{(tools == null || tools.Count == 0 ? "未配置任何工具" : $"已配置 {tools.Count} 个工具但无有效匹配")}");
+        diagInfo.AppendLine($"  - [第 2 级 系统 PATH]：已检索自定义候选 '{candidateCustom}' 与内置候选名，未命中");
+        var detectorsStr = _detectionService.DetectorNames.Count > 0
+            ? string.Join('/', _detectionService.DetectorNames)
+            : "多版本环境管理工具";
+        diagInfo.AppendLine($"  - [第 3 级 版本工具]：已轮询 {detectorsStr}，未探测到安装实例");
+        diagInfo.Append("解决方案：请在桌面端「全局设置 -> 工具配置」中添加对应解释器，或将其安装至系统全局 PATH 中。");
 
-        return null;
-    }
-
-    private static string? SearchPathEnvironment(string fileName)
-    {
-        if (string.IsNullOrWhiteSpace(fileName)) return null;
-
-        var pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(pathEnv)) return null;
-
-        var extensions = OperatingSystem.IsWindows() && !Path.HasExtension(fileName)
-            ? new[] { ".exe", ".cmd", ".bat", "" }
-            : new[] { "" };
-
-        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            try
-            {
-                foreach (var ext in extensions)
-                {
-                    var fullPath = Path.Combine(dir, fileName + ext);
-                    if (File.Exists(fullPath))
-                    {
-                        return fullPath;
-                    }
-                }
-            }
-            catch
-            {
-                // 忽略非法的目录格式
-            }
-        }
-
-        return null;
+        throw new FileNotFoundException(diagInfo.ToString());
     }
 
     private static void ApplyEnvironmentVariables(ProcessStartInfo psi, string? envVariables)
@@ -435,17 +342,6 @@ public partial class CommandExecutor(
         {
             try { File.Delete(tempFile); } catch (Exception ex) { logger.LogWarning(ex, "清理 VBScript 临时文件失败: {Path}", tempFile); }
         }
-    }
-
-    private static string ResolveDefaultPowerShellExecutable()
-    {
-        if (SearchPathEnvironment("pwsh") != null)
-            return "pwsh";
-
-        if (OperatingSystem.IsWindows())
-            return "powershell.exe";
-
-        return "pwsh";
     }
 
     [GeneratedRegex(@"^(.+?)\s*\((.+)\)$")]

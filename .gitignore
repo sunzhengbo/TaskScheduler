@@ -11,3 +11,4 @@ appsettings.*.json
 /.od-skills
 nuget.config
 /.workbuddy
+/.tasks

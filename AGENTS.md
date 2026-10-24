@@ -68,10 +68,12 @@ dotnet test --collect:"XPlat Code Coverage"
 - **Nullable**: Enabled
 - **Implicit Usings**: Enabled
 - **Access Modifiers**: Explicit (public, private, internal)
+- **Primary Constructors**: Prefer C# 12+ primary constructors for classes, structs, and dependency injection (e.g., `public class Service(IDependency dep) : IService`), eliminating boilerplate private readonly field declarations unless explicit backing fields or special assignment logic are strictly necessary.
 
 ### Naming Conventions
 - Classes/Methods/Properties: PascalCase (`MainWindowViewModel`, `HandleToolBarItem`)
 - Private fields: camelCase with underscore (`_fieldName`)
+- Primary constructor parameters: camelCase (`public class Service(ILogger<Service> logger)`)
 - Constants: PascalCase (`MaxRetryCount`)
 - Local variables: camelCase (`localVariable`)
 
@@ -108,6 +110,7 @@ using TaskScheduler.Infra.Helpers;
 - ViewModels inherit from `ViewModelBase` (extends `ObservableValidator`)
 - Use `[RelayCommand]` for commands
 - Use `partial` class for ViewModels with generated commands
+- Use primary constructors for dependency injection (e.g., `public partial class TaskListViewModel(ITaskSchedulerService scheduler) : ViewModelBase`)
 
 ### CLI Patterns
 - Subcommand architecture (e.g., `task`, `log`, `config`, `tool`, `dashboard`, `daemon`)
@@ -118,7 +121,7 @@ using TaskScheduler.Infra.Helpers;
 ### Dependency Injection
 - Use Microsoft.Extensions.DependencyInjection
 - Register services in extension methods (`AddTaskScheduler()`)
-- Use constructor injection
+- Use primary constructors for constructor injection (e.g., `public class ExecutionLogService(DatabaseProvider db) : IExecutionLogService`)
 - Prefer interfaces for abstractions
 
 ### Documentation

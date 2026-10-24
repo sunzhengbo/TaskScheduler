@@ -1,8 +1,11 @@
 using System.ComponentModel;
+
 using Spectre.Console;
 using Spectre.Console.Cli;
+
 using TaskScheduler.Cli.Formatting;
 using TaskScheduler.Cli.Infrastructure;
+using TaskScheduler.Core.Detectors;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
 
@@ -11,8 +14,10 @@ namespace TaskScheduler.Cli.Commands.Task;
 public sealed class TaskViewCommand(
     ITaskSchedulerService taskService,
     IExecutionLogService logService,
-    IToolConfigService? toolConfigService = null) : AsyncCommand<TaskViewCommand.Settings>
+    IToolConfigService? toolConfigService = null,
+    IInterpreterDetectionService? detectionService = null) : AsyncCommand<TaskViewCommand.Settings>
 {
+    private readonly IInterpreterDetectionService _detectionService = detectionService ?? InterpreterDetectionService.Default;
     public sealed class Settings : GlobalCommandSettings
     {
         [CommandArgument(0, "<NAME>")]
@@ -188,7 +193,8 @@ public sealed class TaskViewCommand(
 
         if (toolType == null)
         {
-            return Markup.Escape(rawVersion ?? CommandTypes.DetectBuiltInInterpreterPath(command.Type) ?? "系统默认 (PATH)");
+            var detectedBuiltIn = await _detectionService.DetectAsync(command.Type, ct: ct);
+            return Markup.Escape(rawVersion ?? detectedBuiltIn ?? "系统默认 (PATH)");
         }
 
         IReadOnlyList<ToolConfig>? tools = null;

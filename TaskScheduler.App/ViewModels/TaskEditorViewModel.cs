@@ -19,6 +19,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 
 using TaskScheduler.App.Services;
+using TaskScheduler.Core.Detectors;
 using TaskScheduler.Core.Jobs;
 using TaskScheduler.Core.Models;
 using TaskScheduler.Core.Services;
@@ -144,18 +145,23 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     public AvaloniaList<TaskPriority> AvailablePriorities { get; } = [TaskPriority.Low, TaskPriority.Normal, TaskPriority.High];
     public AvaloniaList<TriggerType> AvailableTriggerTypes { get; } = [TriggerType.Simple, TriggerType.Cron, TriggerType.OnStartup];
 
+    private readonly IInterpreterDetectionService _detectionService;
+    private CancellationTokenSource? _detectCts;
+
     public TaskEditorViewModel(
         ITaskSchedulerService taskService,
         ICommandExecutor commandExecutor,
         INavigationService navigation,
         ILogger<TaskEditorViewModel> logger,
-        IToolConfigService toolConfigService)
+        IToolConfigService toolConfigService,
+        IInterpreterDetectionService? detectionService = null)
     {
         _taskService = taskService;
         _commandExecutor = commandExecutor;
         _navigation = navigation;
         _logger = logger;
         _toolConfigService = toolConfigService;
+        _detectionService = detectionService ?? InterpreterDetectionService.Default;
 
         // 异步加载工具配置
         _ = LoadToolsAsync();
@@ -244,8 +250,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         {
             // 内置类型（Cmd、VBScript）无 ToolConfig，自动检测系统解释器路径
             AvailableInterpreterVersions = [];
-            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
-            BuiltInInterpreterPath = EffectiveInterpreterPath;
+            RefreshFallbackInterpreterPath(Command.Type);
             Command.InterpreterVersion = null;
             InterpreterWarningMessage = null;
             HasInterpreterWarning = false;
@@ -304,8 +309,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
             // 全局未配置该工具，但本机环境变量检测到了该解释器
             AvailableInterpreterVersions = [];
-            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
-            BuiltInInterpreterPath = EffectiveInterpreterPath;
+            RefreshFallbackInterpreterPath(Command.Type);
             var originalSpec = _originalInterpreterName ?? Command.InterpreterName ?? Command.InterpreterVersion;
             if (IsEditMode && !string.IsNullOrWhiteSpace(originalSpec))
             {
@@ -329,8 +333,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         var toolType = CommandTypes.MapToToolType(Command.Type);
         if (toolType == null)
         {
-            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
-            BuiltInInterpreterPath = EffectiveInterpreterPath;
+            RefreshFallbackInterpreterPath(Command.Type);
             return;
         }
 
@@ -346,13 +349,70 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
                           ?? matchingTools[0];
 
             EffectiveInterpreterPath = matched.ExecutablePath;
+            BuiltInInterpreterPath = EffectiveInterpreterPath;
         }
         else
         {
-            EffectiveInterpreterPath = CommandTypes.DetectSystemInterpreterPath(Command.Type);
+            RefreshFallbackInterpreterPath(Command.Type);
+        }
+    }
+
+    /// <summary>
+    /// 异步探测回退的系统解释器物理路径，先通过系统 PATH 快速预填，再后台进行多版本扫描并回填 UI。
+    /// </summary>
+    private void RefreshFallbackInterpreterPath(string commandType)
+    {
+        // 1. 同步快速检索 PATH 环境变量，若命中立即回填，提供即时视觉反馈
+        var quickPath = _detectionService.SearchInPath(commandType);
+        if (!string.IsNullOrWhiteSpace(quickPath))
+        {
+            EffectiveInterpreterPath = quickPath;
+            BuiltInInterpreterPath = quickPath;
+        }
+        else
+        {
+            EffectiveInterpreterPath = null;
+            BuiltInInterpreterPath = null;
         }
 
-        BuiltInInterpreterPath = EffectiveInterpreterPath;
+        // 2. 异步深度探测（版本管理工具扫描与系统默认目录兜底），防止 UI 假死
+        // 注意：不立即 Dispose 旧 CTS，避免持有旧 token 的在途后台任务在 WaitAsync 等处注册回调时抛出 ObjectDisposedException
+        var oldCts = _detectCts;
+        var newCts = new CancellationTokenSource();
+        _detectCts = newCts;
+        oldCts?.Cancel();
+        var ct = newCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var detected = await _detectionService.DetectAsync(commandType, ct: ct).ConfigureAwait(false);
+                if (!ct.IsCancellationRequested)
+                {
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        if (!ct.IsCancellationRequested && Command.Type == commandType)
+                        {
+                            EffectiveInterpreterPath = detected;
+                            BuiltInInterpreterPath = detected;
+                        }
+                    });
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 忽略被新的选择取消的探测任务
+            }
+            catch (ObjectDisposedException)
+            {
+                // 忽略令牌已被释放的情形
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "后台探测解释器路径异常: {CommandType}", commandType);
+            }
+        }, ct);
     }
 
     public void OnParameterReceived(object parameter)
