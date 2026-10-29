@@ -5,6 +5,8 @@
              xmlns:vm="using:TaskScheduler.App.ViewModels"
              xmlns:conv="using:TaskScheduler.App.Converters"
              xmlns:controls="using:TaskScheduler.App.Controls"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:automation="clr-namespace:Avalonia.Automation;assembly=Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="900"
              x:Class="TaskScheduler.App.Views.TaskEditorView"
              x:DataType="vm:TaskEditorViewModel">
@@ -22,7 +24,8 @@
         <!-- Region 2: Basic Info + Triggers -->
         <Border Grid.Row="1" Padding="24,16"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                BorderThickness="0,0,0,1">
+                BorderThickness="0,0,0,1"
+                IsVisible="{Binding !IsScriptContentMaximized}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
                     <controls:SectionCard Title="基本信息" Grid.Column="0">
@@ -146,7 +149,8 @@
         <!-- Region 3: Command Config (elastic, internal scroll) -->
         <Border Grid.Row="2" Padding="24,16"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                BorderThickness="0,0,0,1">
+                BorderThickness="0,0,0,1"
+                IsVisible="{Binding !IsScriptContentMaximized}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <DockPanel LastChildFill="True">
                     <TextBlock Text="命令配置" FontSize="15" FontWeight="SemiBold"
@@ -227,7 +231,15 @@
 
                     <!-- 模式 1: 脚本内容模式 (Inline) -->
                     <Grid RowDefinitions="Auto,*" RowSpacing="4" Margin="0,12,0,0" IsVisible="{Binding IsInlineMode}">
-                        <TextBlock Grid.Row="0" Text="脚本内容" FontSize="13" />
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                            <TextBlock Text="脚本内容" FontSize="13" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Classes="Flat" Padding="8,2"
+                                    Command="{Binding ToggleScriptContentMaximizedCommand}"
+                                    automation:AutomationProperties.Name="{Binding ScriptContentToggleHint}"
+                                    ToolTip.Tip="{Binding ScriptContentToggleHint}">
+                                <avalonia:MaterialIcon Kind="Fullscreen" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
                         <TextBox Grid.Row="1" Text="{Binding InlineScriptContent}"
                                  PlaceholderText="输入要执行的脚本代码…"
                                  AcceptsReturn="True" TextWrapping="Wrap"
@@ -241,7 +253,8 @@
         </Border>
 
         <!-- Region 4: Test Output (elastic, internal scroll) -->
-        <Border Grid.Row="3" Padding="24,16">
+        <Border Grid.Row="3" Padding="24,16"
+                IsVisible="{Binding !IsScriptContentMaximized}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <DockPanel LastChildFill="True">
                     <TextBlock Text="测试输出" FontSize="15" FontWeight="SemiBold"
@@ -262,6 +275,54 @@
                     </Border>
                 </DockPanel>
             </ScrollViewer>
+        </Border>
+
+        <!-- 展开时收起其它配置，脚本编辑器占满测试输出以外的空间 -->
+        <Border Grid.Row="2" Grid.RowSpan="2" Padding="24,16"
+                IsVisible="{Binding IsScriptContentMaximized}">
+            <Grid RowDefinitions="*,220" RowSpacing="12">
+                <Grid Grid.Row="0" RowDefinitions="Auto,*" RowSpacing="4">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="脚本内容" FontSize="13" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="Flat" Padding="8,2"
+                                Command="{Binding ToggleScriptContentMaximizedCommand}"
+                                automation:AutomationProperties.Name="{Binding ScriptContentToggleHint}"
+                                ToolTip.Tip="{Binding ScriptContentToggleHint}">
+                            <Grid Width="16" Height="16">
+                                <avalonia:MaterialIcon Kind="Fullscreen" IsVisible="{Binding !IsScriptContentMaximized}" />
+                                <avalonia:MaterialIcon Kind="FullscreenExit" IsVisible="{Binding IsScriptContentMaximized}" />
+                            </Grid>
+                        </Button>
+                    </Grid>
+                    <TextBox Grid.Row="1" Text="{Binding InlineScriptContent}"
+                             PlaceholderText="输入要执行的脚本代码…"
+                             AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalAlignment="Stretch"
+                             FontFamily="Consolas,Courier New,monospace"
+                             FontSize="13" />
+                </Grid>
+
+                <Border Grid.Row="1" Background="#0d1117" CornerRadius="8" Padding="16">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock Text="测试输出" FontSize="15" FontWeight="SemiBold"
+                                   DockPanel.Dock="Top" Margin="0,0,0,12" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <Grid>
+                                <TextBlock Text="// 点击「测试运行」查看命令执行结果"
+                                           FontFamily="Consolas,Courier New,monospace"
+                                           FontSize="14" Foreground="#6e7681"
+                                           VerticalAlignment="Top"
+                                           IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                                <TextBlock Text="{Binding TestOutput}"
+                                           IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           FontFamily="Consolas,Courier New,monospace"
+                                           FontSize="14" Foreground="#c9d1d9"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

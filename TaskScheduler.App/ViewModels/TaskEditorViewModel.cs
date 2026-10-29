@@ -53,6 +53,11 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private bool _isEditMode;
     [ObservableProperty] private bool _isSaving;
     [ObservableProperty] private string? _validationMessage;
+    [ObservableProperty] private bool _isScriptContentMaximized;
+
+    public string ScriptContentToggleHint => IsScriptContentMaximized ? "还原脚本编辑区" : "最大化脚本编辑区";
+
+    partial void OnIsScriptContentMaximizedChanged(bool value) => OnPropertyChanged(nameof(ScriptContentToggleHint));
 
     [ObservableProperty] private bool _isCronType = true;
     [ObservableProperty] private bool _isSimpleType;
@@ -117,6 +122,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         SetTriggerTypeFlags(TriggerType.Cron);
         TestOutput = string.Empty;
         ValidationMessage = null;
+        IsScriptContentMaximized = false;
         _originalInterpreterName = null;
         InterpreterWarningMessage = null;
         HasInterpreterWarning = false;
@@ -136,6 +142,9 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private string _scriptFilePath = string.Empty;
 
     public string SelectedScriptMode => IsFileMode ? ScriptModes.File : ScriptModes.Inline;
+
+    [RelayCommand]
+    private void ToggleScriptContentMaximized() => IsScriptContentMaximized = !IsScriptContentMaximized;
 
     partial void OnIsInlineModeChanged(bool value)
     {
@@ -157,6 +166,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     {
         if (value)
         {
+            IsScriptContentMaximized = false;
             if (IsInlineMode) IsInlineMode = false;
         }
         else if (!IsInlineMode)
@@ -469,6 +479,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     {
         if (parameter is ScheduledTaskDetail task)
         {
+            IsScriptContentMaximized = false;
             _logger.LogInformation("OnParameterReceived: Name={Name}, Group={Group}, Desc={Desc}, Priority={Priority}, UseBoot={UseBoot}, Triggers={Triggers}",
                 task.Name, task.Group, task.Description, task.Priority, task.UseBootTime, task.Triggers?.Count);
 
