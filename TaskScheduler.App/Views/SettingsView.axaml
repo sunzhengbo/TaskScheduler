@@ -3,7 +3,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:TaskScheduler.App.ViewModels"
-             xmlns:models="using:TaskScheduler.Core.Models"
              xmlns:conv="using:TaskScheduler.App.Converters"
              xmlns:views="using:TaskScheduler.App.Views"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
@@ -71,6 +70,10 @@
                         Classes="settingsNav"
                         Background="{Binding SelectedTab, Converter={x:Static conv:IntEqualToBrushConverter.Instance}, ConverterParameter=2}"
                         FontWeight="{Binding SelectedTab, Converter={x:Static conv:IntEqualFontWeightConverter.Instance}, ConverterParameter=2, FallbackValue=Normal}" />
+                <Button Content="脚本格式化" Command="{Binding SelectTabCommand}" CommandParameter="3"
+                        Classes="settingsNav"
+                        Background="{Binding SelectedTab, Converter={x:Static conv:IntEqualToBrushConverter.Instance}, ConverterParameter=3}"
+                        FontWeight="{Binding SelectedTab, Converter={x:Static conv:IntEqualFontWeightConverter.Instance}, ConverterParameter=3, FallbackValue=Normal}" />
             </StackPanel>
         </Border>
 
@@ -85,6 +88,9 @@
 
             <views:SettingsAppearancePanelView
                 IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=2}" />
+
+            <views:SettingsFormatterPanelView
+                IsVisible="{Binding SelectedTab, Converter={x:Static conv:IntEqualConverter.Instance}, ConverterParameter=3}" />
         </Grid>
 
         <views:AddToolDialogView

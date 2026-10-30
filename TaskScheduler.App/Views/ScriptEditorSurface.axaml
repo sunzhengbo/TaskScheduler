@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:avaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
+             x:Class="TaskScheduler.App.Views.ScriptEditorSurface"
+             x:DataType="vm:TaskEditorViewModel">
+    <!-- 普通视图与最大化视图共用同一套编辑器外观，避免两处重复维护 -->
+    <Grid>
+        <avaloniaEdit:TextEditor x:Name="InnerEditor"
+                                 Focusable="True" IsTabStop="True"
+                                 ShowLineNumbers="True" WordWrap="True"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 VerticalScrollBarVisibility="Auto"
+                                 VerticalAlignment="Stretch"
+                                 FontFamily="Consolas,Courier New,monospace"
+                                 FontSize="13" />
+        <TextBlock Text="输入要执行的脚本代码…" Margin="48,8,8,8"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   IsHitTestVisible="False"
+                   IsVisible="{Binding InlineScriptContent, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+    </Grid>
+</UserControl>

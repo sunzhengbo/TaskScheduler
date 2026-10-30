@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:automation="clr-namespace:Avalonia.Automation;assembly=Avalonia.Controls"
+             x:Class="TaskScheduler.App.Views.ScriptEditorToolbar"
+             x:DataType="vm:TaskEditorViewModel">
+    <!-- 普通视图与最大化视图共用同一套标题行（状态文本 + 格式化 + 最大化切换），避免两处重复维护。
+         切换图标按 IsScriptContentMaximized 自动选择，因此无需外部传参区分两种视图。 -->
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+        <TextBlock Text="脚本内容" FontSize="13" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{Binding FormatterStatusMessage}"
+                   FontSize="11" VerticalAlignment="Center" MaxWidth="360"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding FormatterStatusMessage}" />
+        <Button Grid.Column="2" Classes="Flat" Padding="8,2"
+                Content="格式化" IsEnabled="{Binding CanFormatScript}"
+                Click="OnFormatClick"
+                ToolTip.Tip="格式化全文 (Ctrl+Shift+F)" />
+        <Button Grid.Column="3" Classes="Flat" Padding="8,2"
+                Command="{Binding ToggleScriptContentMaximizedCommand}"
+                automation:AutomationProperties.Name="{Binding ScriptContentToggleHint}"
+                ToolTip.Tip="{Binding ScriptContentToggleHint}">
+            <Grid Width="16" Height="16">
+                <avalonia:MaterialIcon Kind="Fullscreen" IsVisible="{Binding !IsScriptContentMaximized}" />
+                <avalonia:MaterialIcon Kind="FullscreenExit" IsVisible="{Binding IsScriptContentMaximized}" />
+            </Grid>
+        </Button>
+    </Grid>
+</UserControl>

@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             x:Class="TaskScheduler.App.Views.SettingsFormatterPanelView"
+             x:DataType="vm:SettingsViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,0,20">
+        <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="1" CornerRadius="12" Padding="20">
+            <StackPanel Spacing="16">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="脚本格式化工具" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Text="格式化按钮会使用任务选择的解释器与已安装工具。留空路径时自动从解释器环境和 PATH 查找；应用不会自动下载工具。C# 使用内置 Roslyn。"
+                               FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="180,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                    <TextBlock Grid.Row="0" Text="格式化超时（秒）" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding FormatterTimeoutSeconds}" PlaceholderText="{Binding FormatterTimeoutHint}" />
+
+                    <TextBlock Grid.Row="1" Text="Black 可执行文件" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding BlackFormatterPath}" PlaceholderText="留空时使用任务 Python 环境中的 black" />
+
+                    <TextBlock Grid.Row="2" Text="PSScriptAnalyzer 模块" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PsscriptAnalyzerModulePath}" PlaceholderText="模块目录或 .psd1 路径；留空时自动查找" />
+
+                    <TextBlock Grid.Row="3" Text="shfmt 可执行文件" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ShfmtFormatterPath}" PlaceholderText="留空时从 PATH 查找" />
+
+                    <TextBlock Grid.Row="4" Text="Prettier 包或 CLI" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding PrettierPackagePath}" PlaceholderText="{Binding PrettierRequirementHint}" />
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="保存并检测" Classes="Primary"
+                            Command="{Binding SaveFormatterSettingsCommand}"
+                            IsEnabled="{Binding !IsCheckingFormatters}" />
+                    <Button Content="重新检测" Classes="Flat"
+                            Command="{Binding CheckFormatterSettingsCommand}"
+                            IsEnabled="{Binding !IsCheckingFormatters}" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding FormatterStatusMessage}"
+                           TextWrapping="Wrap" FontSize="12"
+                           IsVisible="{Binding FormatterStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+        </Border>
+    </ScrollViewer>
+</UserControl>

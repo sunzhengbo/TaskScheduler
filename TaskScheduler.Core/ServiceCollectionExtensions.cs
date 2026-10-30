@@ -63,6 +63,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IExecutionLogService, ExecutionLogService>();
         services.AddSingleton<IToolConfigService, ToolConfigService>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IScriptFormatterService, ScriptFormatterService>();
 
         return services;
     }

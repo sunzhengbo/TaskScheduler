@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -21,8 +22,14 @@ namespace TaskScheduler.App.ViewModels;
 
 public partial class SettingsViewModel : ViewModelBase
 {
+    // 模型默认值的单一事实来源：字段初始化与 ResetDefaults 均从此处取值，
+    // 模型默认值变更后界面初始态与「恢复默认」自动跟随。
+    private static readonly EngineSettings EngineDefaults = new();
+    private static readonly AppearanceSettings AppearanceDefaults = new();
+
     private readonly IToolConfigService _toolService;
     private readonly ISettingsService _settingsService;
+    private readonly IScriptFormatterService _formatterService;
     private readonly ILogger<SettingsViewModel> _logger;
 
     [ObservableProperty] private int _selectedTab;
@@ -36,22 +43,33 @@ public partial class SettingsViewModel : ViewModelBase
     public string SaveButtonText => IsSaving ? "保存中..." : "保存设置";
 
     // 引擎设置
-    [ObservableProperty] private bool _startupEnabled;
-    [ObservableProperty] private bool _startupMinimize;
-    [ObservableProperty] private bool _rescheduleOnStartup = true;
+    [ObservableProperty] private bool _startupEnabled = EngineDefaults.StartupEnabled;
+    [ObservableProperty] private bool _startupMinimize = EngineDefaults.StartupMinimize;
+    [ObservableProperty] private bool _rescheduleOnStartup = EngineDefaults.RescheduleOnStartup;
 
     partial void OnStartupEnabledChanged(bool value)
     {
         if (!value)
             StartupMinimize = false;
     }
-    [ObservableProperty] private string _logRetentionDays = "30";
-    [ObservableProperty] private string _maxThreads = "10";
-    [ObservableProperty] private string _databaseType = "SQLite";
+    [ObservableProperty] private string _logRetentionDays = EngineDefaults.LogRetentionDays.ToString(CultureInfo.InvariantCulture);
+    [ObservableProperty] private string _maxThreads = EngineDefaults.MaxThreads.ToString(CultureInfo.InvariantCulture);
+    [ObservableProperty] private string _databaseType = EngineDefaults.DatabaseType;
 
     // 外观设置
-    [ObservableProperty] private string _themeMode = "System";
-    [ObservableProperty] private bool _compactMode;
+    [ObservableProperty] private string _themeMode = AppearanceDefaults.ThemeMode;
+    [ObservableProperty] private bool _compactMode = AppearanceDefaults.CompactMode;
+
+    // Formatter configuration
+    [ObservableProperty]
+    private string _formatterTimeoutSeconds =
+        ScriptFormatterDefaults.DefaultTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+    [ObservableProperty] private string _blackFormatterPath = string.Empty;
+    [ObservableProperty] private string _psscriptAnalyzerModulePath = string.Empty;
+    [ObservableProperty] private string _shfmtFormatterPath = string.Empty;
+    [ObservableProperty] private string _prettierPackagePath = string.Empty;
+    [ObservableProperty] private string _formatterStatusMessage = string.Empty;
+    [ObservableProperty] private bool _isCheckingFormatters;
 
     // 添加工具对话框
     [ObservableProperty] private bool _isAddToolDialogOpen;
@@ -118,10 +136,28 @@ public partial class SettingsViewModel : ViewModelBase
     public AvaloniaList<string> DatabaseTypes { get; } = ["SQLite"];
     public AvaloniaList<string> ThemeModes { get; } = ["System", "Light", "Dark"];
 
-    public SettingsViewModel(IToolConfigService toolService, ISettingsService settingsService, ILogger<SettingsViewModel> logger)
+    /// <summary>Prettier 路径输入框提示，版本要求取自 Core 常量，避免界面与实现各写一份。</summary>
+    public string PrettierRequirementHint =>
+        $"包目录或 bin/prettier.cjs；要求版本 ≥ {ScriptFormatterDefaults.MinimumPrettierVersion}";
+
+    /// <summary>
+    /// 超时输入框的占位提示。默认值同样取自 <see cref="ScriptFormatterDefaults"/>，
+    /// 否则 XAML 里会形成与常量脱节的第二份副本。
+    /// 保持实例属性：XAML 用 <c>{Binding}</c> 取值，改成 <see langword="static"/> 会让绑定静默失效
+    /// （分析器会提示 CA1822，此处按上述理由不采纳）。
+    /// </summary>
+    public string FormatterTimeoutHint =>
+        ScriptFormatterDefaults.DefaultTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+
+    public SettingsViewModel(
+        IToolConfigService toolService,
+        ISettingsService settingsService,
+        IScriptFormatterService formatterService,
+        ILogger<SettingsViewModel> logger)
     {
         _toolService = toolService;
         _settingsService = settingsService;
+        _formatterService = formatterService;
         _logger = logger;
         _logger.LogDebug("SettingsViewModel 已创建");
     }
@@ -145,8 +181,8 @@ public partial class SettingsViewModel : ViewModelBase
                 try
                 {
                     var engine = EngineSettings.FromJson(engineJson);
-                    LogRetentionDays = engine.LogRetentionDays.ToString();
-                    MaxThreads = engine.MaxThreads.ToString();
+                    LogRetentionDays = engine.LogRetentionDays.ToString(CultureInfo.InvariantCulture);
+                    MaxThreads = engine.MaxThreads.ToString(CultureInfo.InvariantCulture);
                     DatabaseType = engine.DatabaseType;
                     StartupEnabled = engine.StartupEnabled;
                     StartupMinimize = engine.StartupMinimize;
@@ -167,14 +203,21 @@ public partial class SettingsViewModel : ViewModelBase
                 catch (Exception ex) { _logger.LogWarning(ex, "反序列化外观设置失败"); }
             }
 
+            var formatterSettings = await _formatterService.GetSettingsAsync();
+            FormatterTimeoutSeconds = formatterSettings.TimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+            BlackFormatterPath = formatterSettings.BlackExecutablePath ?? string.Empty;
+            PsscriptAnalyzerModulePath = formatterSettings.PsscriptAnalyzerModulePath ?? string.Empty;
+            ShfmtFormatterPath = formatterSettings.ShfmtExecutablePath ?? string.Empty;
+            PrettierPackagePath = formatterSettings.PrettierPackagePath ?? string.Empty;
+
             // 加载时同步系统自启配置，确保与数据库设置一致
             StartupHelper.SyncStartup(StartupEnabled, StartupMinimize);
         }
         catch (Exception ex)
-            {
-                _logger.LogError(ex, "加载设置失败");
-                ShowToast("加载设置失败", NotificationType.Error);
-            }
+        {
+            _logger.LogError(ex, "加载设置失败");
+            ShowToast("加载设置失败", NotificationType.Error);
+        }
         finally { IsLoading = false; }
     }
 
@@ -313,6 +356,73 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task SaveFormatterSettingsAsync()
+    {
+        if (!int.TryParse(FormatterTimeoutSeconds, out var timeoutSeconds) || !ScriptFormatterSettings.IsValidTimeout(timeoutSeconds))
+        {
+            FormatterStatusMessage =
+                $"超时秒数必须为 {ScriptFormatterDefaults.MinTimeoutSeconds} 到 {ScriptFormatterDefaults.MaxTimeoutSeconds} 之间的整数。";
+            return;
+        }
+
+        try
+        {
+            // 就地修改已加载的设置，而不是 new 一个新实例只复制已知字段：
+            // 这样 ScriptFormatterSettings 新增属性时无需同步此处，不会在每次保存时把它静默重置为默认值。
+            var settings = await _formatterService.GetSettingsAsync();
+            settings.TimeoutSeconds = timeoutSeconds;
+            // 路径直接赋界面原始值，空白折叠由 ScriptFormatterSettings.NormalizePaths 统一负责
+            // （SaveSettingsAsync 落盘前必定调用），避免同一规则在本文件里再写一份实现。
+            settings.BlackExecutablePath = BlackFormatterPath;
+            settings.PsscriptAnalyzerModulePath = PsscriptAnalyzerModulePath;
+            settings.ShfmtExecutablePath = ShfmtFormatterPath;
+            settings.PrettierPackagePath = PrettierPackagePath;
+
+            await _formatterService.SaveSettingsAsync(settings);
+            ShowToast("格式化工具设置已保存");
+            await CheckFormatterSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "保存格式化工具设置失败");
+            FormatterStatusMessage = $"保存失败：{ex.Message}";
+            ShowToast("保存格式化工具设置失败", NotificationType.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckFormatterSettingsAsync()
+    {
+        if (IsCheckingFormatters)
+        {
+            return;
+        }
+
+        IsCheckingFormatters = true;
+        FormatterStatusMessage = "正在检测格式化工具…";
+        try
+        {
+            var languages = CommandTypes.FormattableTypes;
+            var capabilities = await Task.WhenAll(
+                languages.Select(language => _formatterService.GetCapabilityAsync(language)));
+            var statuses = capabilities.Select(capability => capability.Available
+                    ? $"{capability.Language}: {capability.Tool} {capability.Version}"
+                    : $"{capability.Language}: {capability.Reason}");
+
+            FormatterStatusMessage = string.Join(Environment.NewLine, statuses);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "检测格式化工具失败");
+            FormatterStatusMessage = $"检测失败：{ex.Message}";
+        }
+        finally
+        {
+            IsCheckingFormatters = false;
+        }
+    }
+
+    [RelayCommand]
     private async Task SetThemeModeAsync(string mode)
     {
         ThemeMode = mode;
@@ -335,15 +445,15 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void ResetDefaults()
     {
-        LogRetentionDays = "30";
-        MaxThreads = "10";
-        DatabaseType = "SQLite";
-        ThemeMode = "System";
-        CompactMode = false;
-        StartupEnabled = false;
-        StartupMinimize = false;
-        RescheduleOnStartup = true;
-        ApplyTheme("System");
+        LogRetentionDays = EngineDefaults.LogRetentionDays.ToString(CultureInfo.InvariantCulture);
+        MaxThreads = EngineDefaults.MaxThreads.ToString(CultureInfo.InvariantCulture);
+        DatabaseType = EngineDefaults.DatabaseType;
+        ThemeMode = AppearanceDefaults.ThemeMode;
+        CompactMode = AppearanceDefaults.CompactMode;
+        StartupEnabled = EngineDefaults.StartupEnabled;
+        StartupMinimize = EngineDefaults.StartupMinimize;
+        RescheduleOnStartup = EngineDefaults.RescheduleOnStartup;
+        ApplyTheme(ThemeMode);
     }
 
     [RelayCommand]

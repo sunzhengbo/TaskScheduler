@@ -9,6 +9,7 @@ using TaskScheduler.Cli.Commands.About;
 using TaskScheduler.Cli.Commands.Config;
 using TaskScheduler.Cli.Commands.Daemon;
 using TaskScheduler.Cli.Commands.Dashboard;
+using TaskScheduler.Cli.Commands.Format;
 using TaskScheduler.Cli.Commands.Log;
 using TaskScheduler.Cli.Commands.Task;
 using TaskScheduler.Cli.Commands.Tool;
@@ -281,6 +282,24 @@ internal static class Program
                 cfg.AddCommand<ConfigResetCommand>("reset")
                     .WithDescription("将引擎与外观设置恢复为系统默认值")
                     .WithExample("config", "reset", "-y");
+
+                cfg.AddBranch("formatter", formatter =>
+                {
+                    formatter.SetDescription("脚本 formatter 路径与超时设置");
+                    formatter.AddCommand<ConfigFormatterShowCommand>("show")
+                        .WithDescription("显示 formatter 设置和环境可用性")
+                        .WithExample("config", "formatter", "show", "--json");
+                    formatter.AddCommand<ConfigFormatterSetCommand>("set")
+                        .WithDescription("设置 formatter 路径或超时")
+                        .WithExample("config", "formatter", "set", "--lang", "Bash", "--path", "C:\\tools\\shfmt.exe")
+                        .WithExample("config", "formatter", "set", "--timeout-seconds", "20");
+                    formatter.AddCommand<ConfigFormatterClearCommand>("clear")
+                        .WithDescription("清除指定语言的 formatter 路径覆盖")
+                        .WithExample("config", "formatter", "clear", "--lang", "Python");
+                    formatter.AddCommand<ConfigFormatterTestCommand>("test")
+                        .WithDescription("检测 formatter、运行时版本和可用状态")
+                        .WithExample("config", "formatter", "test", "--lang", "Node.js", "--json");
+                });
             });
 
             // 6. 无头守护进程模块
@@ -300,6 +319,11 @@ internal static class Program
                 .WithDescription("查看版本、运行时环境、数据库路径及调度引擎状态")
                 .WithExample("about")
                 .WithExample("about", "--json");
+
+            config.AddCommand<FormatCommand>("format")
+                .WithDescription("使用本机可用的 formatter 格式化脚本文本")
+                .WithExample("format", "--lang", "Python", "--file", "script.py")
+                .WithExample("format", "--lang", "Bash", "--json");
         });
 
         try

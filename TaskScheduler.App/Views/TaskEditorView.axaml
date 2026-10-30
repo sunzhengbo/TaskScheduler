@@ -5,13 +5,16 @@
              xmlns:vm="using:TaskScheduler.App.ViewModels"
              xmlns:conv="using:TaskScheduler.App.Converters"
              xmlns:controls="using:TaskScheduler.App.Controls"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:automation="clr-namespace:Avalonia.Automation;assembly=Avalonia.Controls"
+             xmlns:views="using:TaskScheduler.App.Views"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="900"
              x:Class="TaskScheduler.App.Views.TaskEditorView"
-             x:DataType="vm:TaskEditorViewModel">
+             x:DataType="vm:TaskEditorViewModel"
+             KeyDown="OnTaskEditorKeyDown">
 
-    <Grid RowDefinitions="Auto,Auto,*,*">
+    <!-- 根 grid 只分「横幅」与「内容区」两段：内容区里放两套互斥布局（普通视图 / 最大化视图）靠 IsVisible 切换。
+         不能再用 RowSpan 让最大化视图借用普通视图的行——星号行不会因为子元素隐藏而收缩，
+         那样最大化视图只能占到部分高度，上方留出一大片空白。 -->
+    <Grid RowDefinitions="Auto,*">
         <!-- Region 1: Validation banner -->
         <Border Grid.Row="0" Margin="24,12,24,0"
                 Background="#33FF6B6B" CornerRadius="8" Padding="12,10"
@@ -21,141 +24,146 @@
                        TextWrapping="Wrap" />
         </Border>
 
-        <!-- Region 2: Basic Info + Triggers -->
-        <Border Grid.Row="1" Padding="24,16"
-                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                BorderThickness="0,0,0,1"
-                IsVisible="{Binding !IsScriptContentMaximized}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
-                    <controls:SectionCard Title="基本信息" Grid.Column="0">
-                        <StackPanel Spacing="12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="任务名称 *" FontSize="13" />
-                                <TextBox Text="{Binding TaskName}" PlaceholderText="例如：数据库备份"
-                                        IsEnabled="{Binding !IsEditMode}" />
-                            </StackPanel>
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                                <StackPanel Grid.Column="0" Spacing="4">
-                                    <TextBlock Text="分组" FontSize="13" />
-                                    <ComboBox ItemsSource="{Binding AvailableGroups}" SelectedItem="{Binding Group}"
-                                              IsEnabled="{Binding !IsEditMode}" HorizontalAlignment="Stretch" />
+        <!-- 普通视图：沿用原版（改动前）的分区思路——基本信息区 Auto 按内容自适应（任何窗口尺寸都不留白），
+             富余空间全部给命令配置区与输出区；星号行保证小窗口下两区按比例收缩、靠内部滚动兜底，
+             不会被挤成 0。基本信息内部 ScrollViewer 设 MaxHeight 兜底，防止极端内容把下方两区挤没。 -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,3*,2*"
+              IsVisible="{Binding !IsScriptContentMaximized}">
+            <!-- Region 2: Basic Info + Triggers -->
+            <Border Grid.Row="0" Padding="24,16"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                    BorderThickness="0,0,0,1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              MaxHeight="380">
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                        <controls:SectionCard Title="基本信息" Grid.Column="0">
+                            <StackPanel Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="任务名称 *" FontSize="13" />
+                                    <TextBox Text="{Binding TaskName}" PlaceholderText="例如：数据库备份"
+                                             IsEnabled="{Binding !IsEditMode}" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="4">
-                                    <TextBlock Text="优先级" FontSize="13" />
-                                    <ComboBox ItemsSource="{Binding AvailablePriorities}" SelectedItem="{Binding Priority}"
-                                              HorizontalAlignment="Stretch" />
-                                </StackPanel>
-                            </Grid>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="描述" FontSize="13" />
-                                <TextBox Text="{Binding Description}" PlaceholderText="简要描述这个任务的用途…"
-                                        AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
-                            </StackPanel>
-                        </StackPanel>
-                    </controls:SectionCard>
-                    <controls:SectionCard Title="触发器配置" Grid.Column="1">
-                        <StackPanel Spacing="12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="触发器类型" FontSize="13" />
-                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                                    <Border CornerRadius="8" Padding="12,10"
-                                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                                            BorderThickness="1" Cursor="Hand">
-                                        <StackPanel Spacing="2">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <RadioButton GroupName="TriggerType"
-                                                             IsChecked="{Binding IsCronType}" />
-                                                <TextBlock Text="Cron 表达式" FontSize="13" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <TextBlock Text="灵活的时间表达式调度"
-                                                       FontSize="11" TextWrapping="Wrap"
-                                                       HorizontalAlignment="Left" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border CornerRadius="8" Padding="12,10"
-                                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                                            BorderThickness="1" Cursor="Hand">
-                                        <StackPanel Spacing="2">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <RadioButton GroupName="TriggerType"
-                                                             IsChecked="{Binding IsSimpleType}" />
-                                                <TextBlock Text="简单间隔" FontSize="13" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <TextBlock Text="固定时间间隔重复执行"
-                                                       FontSize="11" TextWrapping="Wrap"
-                                                       HorizontalAlignment="Left" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border CornerRadius="8" Padding="12,10"
-                                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                                            BorderThickness="1" Cursor="Hand">
-                                        <StackPanel Spacing="2">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <RadioButton GroupName="TriggerType"
-                                                             IsChecked="{Binding IsOnStartupType}" />
-                                                <TextBlock Text="开机启动" FontSize="13" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <TextBlock Text="应用启动时立即执行一次"
-                                                       FontSize="11" TextWrapping="Wrap"
-                                                       HorizontalAlignment="Left" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-                            </StackPanel>
-                            <StackPanel Spacing="4" IsVisible="{Binding IsCronType}">
-                                <TextBlock Text="Cron 表达式 *" FontSize="13" />
-                                <TextBox Text="{Binding CronExpression}" PlaceholderText="例如: 0/5 * * * ?"
-                                        FontFamily="Consolas,Courier New,monospace" />
-                                <TextBlock Text="[秒] 分 时 日 月 周 [年]（秒和年可选）" FontSize="12" />
-                            </StackPanel>
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding IsSimpleType}">
-                                <StackPanel Grid.Column="0" Spacing="4">
-                                    <TextBlock Text="重复次数 (-1=无限)" FontSize="13" />
-                                    <NumericUpDown Value="{Binding RepeatCount}" Minimum="-1"
-                                                   HorizontalAlignment="Stretch" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="4">
-                                    <TextBlock Text="间隔（分钟）" FontSize="13" />
-                                    <NumericUpDown Value="{Binding RepeatIntervalMinutes}" Minimum="1"
-                                                   HorizontalAlignment="Stretch" />
-                                </StackPanel>
-                            </Grid>
-                            <CheckBox Content="使用开机时间作为起始时间" IsChecked="{Binding UseBootTime}"
-                                      IsVisible="{Binding IsSimpleType}">
-                                <ToolTip.Tip>
-                                    <StackPanel Spacing="6" MaxWidth="320">
-                                        <TextBlock Text="起始时间模式" FontWeight="SemiBold" FontSize="13" />
-                                        <TextBlock Text="开启：以系统开机时间为基准，调度时间固定对齐，重启应用不会漂移。" FontSize="12" TextWrapping="Wrap" />
-                                        <TextBlock Text="关闭：以应用启动时间为基准，首次执行需等待一个间隔周期，每次重启应用后时间网格重新计算。" FontSize="12" TextWrapping="Wrap" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="分组" FontSize="13" />
+                                        <ComboBox ItemsSource="{Binding AvailableGroups}" SelectedItem="{Binding Group}"
+                                                  IsEnabled="{Binding !IsEditMode}" HorizontalAlignment="Stretch" />
                                     </StackPanel>
-                                </ToolTip.Tip>
-                            </CheckBox>
-                            <TextBlock Text="任务将在每次应用启动时立即执行一次。任务处于启用状态时才会触发。"
-                                       FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-                                       IsVisible="{Binding IsOnStartupType}" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </controls:SectionCard>
-                </Grid>
-            </ScrollViewer>
-        </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="优先级" FontSize="13" />
+                                        <ComboBox ItemsSource="{Binding AvailablePriorities}" SelectedItem="{Binding Priority}"
+                                                  HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="描述" FontSize="13" />
+                                    <TextBox Text="{Binding Description}" PlaceholderText="简要描述这个任务的用途…"
+                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
+                                </StackPanel>
+                            </StackPanel>
+                        </controls:SectionCard>
+                        <controls:SectionCard Title="触发器配置" Grid.Column="1">
+                            <StackPanel Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="触发器类型" FontSize="13" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                        <Border CornerRadius="8" Padding="12,10"
+                                                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                                BorderThickness="1" Cursor="Hand">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <RadioButton GroupName="TriggerType"
+                                                                 IsChecked="{Binding IsCronType}" />
+                                                    <TextBlock Text="Cron 表达式" FontSize="13" FontWeight="SemiBold"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Text="灵活的时间表达式调度"
+                                                           FontSize="11" TextWrapping="Wrap"
+                                                           HorizontalAlignment="Left" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border CornerRadius="8" Padding="12,10"
+                                                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                                BorderThickness="1" Cursor="Hand">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <RadioButton GroupName="TriggerType"
+                                                                 IsChecked="{Binding IsSimpleType}" />
+                                                    <TextBlock Text="简单间隔" FontSize="13" FontWeight="SemiBold"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Text="固定时间间隔重复执行"
+                                                           FontSize="11" TextWrapping="Wrap"
+                                                           HorizontalAlignment="Left" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border CornerRadius="8" Padding="12,10"
+                                                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                                BorderThickness="1" Cursor="Hand">
+                                            <StackPanel Spacing="2">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <RadioButton GroupName="TriggerType"
+                                                                 IsChecked="{Binding IsOnStartupType}" />
+                                                    <TextBlock Text="开机启动" FontSize="13" FontWeight="SemiBold"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Text="应用启动时立即执行一次"
+                                                           FontSize="11" TextWrapping="Wrap"
+                                                           HorizontalAlignment="Left" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Spacing="4" IsVisible="{Binding IsCronType}">
+                                    <TextBlock Text="Cron 表达式 *" FontSize="13" />
+                                    <TextBox Text="{Binding CronExpression}" PlaceholderText="例如: 0/5 * * * ?"
+                                            FontFamily="Consolas,Courier New,monospace" />
+                                    <TextBlock Text="[秒] 分 时 日 月 周 [年]（秒和年可选）" FontSize="12" />
+                                </StackPanel>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding IsSimpleType}">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="重复次数 (-1=无限)" FontSize="13" />
+                                        <NumericUpDown Value="{Binding RepeatCount}" Minimum="-1"
+                                                       HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="间隔（分钟）" FontSize="13" />
+                                        <NumericUpDown Value="{Binding RepeatIntervalMinutes}" Minimum="1"
+                                                       HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+                                </Grid>
+                                <CheckBox Content="使用开机时间作为起始时间" IsChecked="{Binding UseBootTime}"
+                                          IsVisible="{Binding IsSimpleType}">
+                                    <ToolTip.Tip>
+                                        <StackPanel Spacing="6" MaxWidth="320">
+                                            <TextBlock Text="起始时间模式" FontWeight="SemiBold" FontSize="13" />
+                                            <TextBlock Text="开启：以系统开机时间为基准，调度时间固定对齐，重启应用不会漂移。" FontSize="12" TextWrapping="Wrap" />
+                                            <TextBlock Text="关闭：以应用启动时间为基准，首次执行需等待一个间隔周期，每次重启应用后时间网格重新计算。" FontSize="12" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </ToolTip.Tip>
+                                </CheckBox>
+                                <TextBlock Text="任务将在每次应用启动时立即执行一次。任务处于启用状态时才会触发。"
+                                           FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                           IsVisible="{Binding IsOnStartupType}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </controls:SectionCard>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
 
-        <!-- Region 3: Command Config (elastic, internal scroll) -->
-        <Border Grid.Row="2" Padding="24,16"
-                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                BorderThickness="0,0,0,1"
-                IsVisible="{Binding !IsScriptContentMaximized}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <DockPanel LastChildFill="True">
-                    <TextBlock Text="命令配置" FontSize="15" FontWeight="SemiBold"
-                               DockPanel.Dock="Top" Margin="0,0,0,12" />
-                    <StackPanel DockPanel.Dock="Top" Spacing="12">
+            <!-- Region 3: Command Config (elastic, internal scroll) -->
+            <Border Grid.Row="1" Padding="24,16"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                    BorderThickness="0,0,0,1">
+                <!-- 注意：AvaloniaEdit 的 TextEditor 自带滚动视口，放进高度不受限的滚动容器里时
+                     视口高度不确定，容易出现点不进去、光标不显示、自动补全弹窗定位异常（未捕获会崩进程）。
+                     因此这里整块保持可滚动，但编辑器本身给固定高度、独立滚动；最大化视图走弹性布局。 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="命令配置" FontSize="15" FontWeight="SemiBold" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="命令类型" FontSize="13" />
                             <ComboBox ItemsSource="{Binding AvailableCommandTypes}"
@@ -227,101 +235,32 @@
                                         Command="{Binding BrowseScriptFileCommand}" />
                             </Grid>
                         </StackPanel>
+
+                        <!-- 模式 1: 脚本内容模式 (Inline) -->
+                        <Grid RowDefinitions="Auto,Auto" RowSpacing="4" Margin="0,4,0,0" IsVisible="{Binding IsInlineMode}">
+                            <views:ScriptEditorToolbar Grid.Row="0" x:Name="InlineToolbar" />
+                            <views:ScriptEditorSurface Grid.Row="1" x:Name="InlineSurface" Height="280" />
+                        </Grid>
                     </StackPanel>
+                </ScrollViewer>
+            </Border>
 
-                    <!-- 模式 1: 脚本内容模式 (Inline) -->
-                    <Grid RowDefinitions="Auto,*" RowSpacing="4" Margin="0,12,0,0" IsVisible="{Binding IsInlineMode}">
-                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                            <TextBlock Text="脚本内容" FontSize="13" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Classes="Flat" Padding="8,2"
-                                    Command="{Binding ToggleScriptContentMaximizedCommand}"
-                                    automation:AutomationProperties.Name="{Binding ScriptContentToggleHint}"
-                                    ToolTip.Tip="{Binding ScriptContentToggleHint}">
-                                <avalonia:MaterialIcon Kind="Fullscreen" Width="16" Height="16" />
-                            </Button>
-                        </Grid>
-                        <TextBox Grid.Row="1" Text="{Binding InlineScriptContent}"
-                                 PlaceholderText="输入要执行的脚本代码…"
-                                 AcceptsReturn="True" TextWrapping="Wrap"
-                                 VerticalAlignment="Stretch"
-                                 MinHeight="140"
-                                 FontFamily="Consolas,Courier New,monospace"
-                                 FontSize="13" />
-                    </Grid>
-                </DockPanel>
-            </ScrollViewer>
-        </Border>
-
-        <!-- Region 4: Test Output (elastic, internal scroll) -->
-        <Border Grid.Row="3" Padding="24,16"
-                IsVisible="{Binding !IsScriptContentMaximized}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <DockPanel LastChildFill="True">
-                    <TextBlock Text="测试输出" FontSize="15" FontWeight="SemiBold"
-                               DockPanel.Dock="Top" Margin="0,0,0,12" />
-                    <Border Background="#0d1117" CornerRadius="8" MinHeight="120" Padding="16">
-                        <Grid>
-                            <TextBlock Text="// 点击「测试运行」查看命令执行结果"
-                                       FontFamily="Consolas,Courier New,monospace"
-                                       FontSize="14" Foreground="#6e7681"
-                                       VerticalAlignment="Top"
-                                       IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
-                            <TextBlock Text="{Binding TestOutput}"
-                                       IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       FontFamily="Consolas,Courier New,monospace"
-                                       FontSize="14" Foreground="#c9d1d9"
-                                       TextWrapping="Wrap" />
-                        </Grid>
-                    </Border>
-                </DockPanel>
-            </ScrollViewer>
-        </Border>
+            <!-- Region 4: Test Output (elastic, internal scroll) -->
+            <Border Grid.Row="2" Padding="24,16">
+                <views:TestOutputPanel />
+            </Border>
+        </Grid>
 
         <!-- 展开时收起其它配置，脚本编辑器占满测试输出以外的空间 -->
-        <Border Grid.Row="2" Grid.RowSpan="2" Padding="24,16"
+        <Border Grid.Row="1" Padding="24,16"
                 IsVisible="{Binding IsScriptContentMaximized}">
             <Grid RowDefinitions="*,220" RowSpacing="12">
                 <Grid Grid.Row="0" RowDefinitions="Auto,*" RowSpacing="4">
-                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                        <TextBlock Text="脚本内容" FontSize="13" VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Classes="Flat" Padding="8,2"
-                                Command="{Binding ToggleScriptContentMaximizedCommand}"
-                                automation:AutomationProperties.Name="{Binding ScriptContentToggleHint}"
-                                ToolTip.Tip="{Binding ScriptContentToggleHint}">
-                            <Grid Width="16" Height="16">
-                                <avalonia:MaterialIcon Kind="Fullscreen" IsVisible="{Binding !IsScriptContentMaximized}" />
-                                <avalonia:MaterialIcon Kind="FullscreenExit" IsVisible="{Binding IsScriptContentMaximized}" />
-                            </Grid>
-                        </Button>
-                    </Grid>
-                    <TextBox Grid.Row="1" Text="{Binding InlineScriptContent}"
-                             PlaceholderText="输入要执行的脚本代码…"
-                             AcceptsReturn="True" TextWrapping="Wrap"
-                             VerticalAlignment="Stretch"
-                             FontFamily="Consolas,Courier New,monospace"
-                             FontSize="13" />
+                    <views:ScriptEditorToolbar Grid.Row="0" x:Name="MaximizedToolbar" />
+                    <views:ScriptEditorSurface Grid.Row="1" x:Name="MaximizedSurface" />
                 </Grid>
 
-                <Border Grid.Row="1" Background="#0d1117" CornerRadius="8" Padding="16">
-                    <DockPanel LastChildFill="True">
-                        <TextBlock Text="测试输出" FontSize="15" FontWeight="SemiBold"
-                                   DockPanel.Dock="Top" Margin="0,0,0,12" />
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <Grid>
-                                <TextBlock Text="// 点击「测试运行」查看命令执行结果"
-                                           FontFamily="Consolas,Courier New,monospace"
-                                           FontSize="14" Foreground="#6e7681"
-                                           VerticalAlignment="Top"
-                                           IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
-                                <TextBlock Text="{Binding TestOutput}"
-                                           IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           FontFamily="Consolas,Courier New,monospace"
-                                           FontSize="14" Foreground="#c9d1d9"
-                                           TextWrapping="Wrap" />
-                            </Grid>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
+                <views:TestOutputPanel Grid.Row="1" />
             </Grid>
         </Border>
     </Grid>

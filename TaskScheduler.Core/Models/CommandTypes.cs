@@ -16,6 +16,11 @@ public static class CommandTypes
     public const string CSharp = "C# (.NET)";
 
     /// <summary>
+    /// 支持脚本格式化的命令类型（按展示顺序），UI 与 CLI 的可用性检测均以此为准。
+    /// </summary>
+    public static IReadOnlyList<string> FormattableTypes { get; } = [CSharp, Python, PowerShell, Shell, NodeJs];
+
+    /// <summary>
     /// 获取当前操作系统支持的全部命令类型列表
     /// </summary>
     public static IReadOnlyList<string> GetAvailableCommandTypes()

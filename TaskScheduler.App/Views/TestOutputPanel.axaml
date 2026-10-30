@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TaskScheduler.App.ViewModels"
+             x:Class="TaskScheduler.App.Views.TestOutputPanel"
+             x:DataType="vm:TaskEditorViewModel">
+    <!-- 普通视图与最大化视图共用同一套测试输出面板（标题 + 占位提示 + 输出文本）。
+         这里不设 MinHeight：宿主行的可用高度由 TaskEditorView 的星号行决定，
+         组件再施加最小高度只会在窄窗口下溢出被裁切，而不会真正保住空间。 -->
+    <DockPanel LastChildFill="True">
+        <TextBlock Text="测试输出" FontSize="15" FontWeight="SemiBold"
+                   DockPanel.Dock="Top" Margin="0,0,0,12" />
+        <Border Background="#0d1117" CornerRadius="8" Padding="16">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <Grid>
+                    <TextBlock Text="// 点击「测试运行」查看命令执行结果"
+                               FontFamily="Consolas,Courier New,monospace"
+                               FontSize="14" Foreground="#6e7681"
+                               VerticalAlignment="Top"
+                               IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                    <TextBlock Text="{Binding TestOutput}"
+                               IsVisible="{Binding TestOutput, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               FontFamily="Consolas,Courier New,monospace"
+                               FontSize="14" Foreground="#c9d1d9"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</UserControl>

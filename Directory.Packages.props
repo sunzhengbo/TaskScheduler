@@ -10,6 +10,8 @@
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <PackageVersion Include="AvaloniaEdit.TextMate" Version="12.0.0" />
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.0" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.4" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
@@ -18,6 +20,7 @@
     <PackageVersion Include="Irihi.Ursa.Themes.Semi" Version="2.0.0" />
     <PackageVersion Include="JetBrains.Annotations" Version="2025.2.4" />
     <PackageVersion Include="Material.Icons.Avalonia" Version="3.0.2" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.1" />
@@ -50,5 +53,7 @@
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.57.2" />
     <PackageVersion Include="System.Diagnostics.EventLog" Version="10.0.1" />
+    <!-- 语法高亮用的 TextMate 语法集，非 Avalonia 官方包，故不放在上面的 Avalonia 分组 -->
+    <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.4" />
   </ItemGroup>
 </Project>

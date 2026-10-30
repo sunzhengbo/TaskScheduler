@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Notifications;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -39,6 +40,9 @@ public class App : Application
         Environment.CommandLine.Contains("Designer.HostApp", StringComparison.OrdinalIgnoreCase)
         || AppDomain.CurrentDomain.FriendlyName.Contains("DesignHost", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>上一次向用户提示 UI 异常的时间戳，用于 10 秒限流。</summary>
+    private static DateTimeOffset _lastUiExceptionNoticeAt = DateTimeOffset.MinValue;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -56,6 +60,8 @@ public class App : Application
             base.OnFrameworkInitializationCompleted();
             return;
         }
+
+        RegisterGlobalExceptionHandlers();
 
         var services = new ServiceCollection();
         services.AddCommonServices();
@@ -85,6 +91,70 @@ public class App : Application
     }
 
     /// <summary>
+    /// 注册全局未处理异常兜底。UI 线程异常此前会直接终止进程且不留下任何日志（表现为「闪退」），
+    /// 这里统一落盘并拦截，既保住用户正在编辑的内容，也让后续排查有据可依。
+    /// </summary>
+    private static void RegisterGlobalExceptionHandlers()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            try
+            {
+                Serilog.Log.Fatal(e.ExceptionObject as Exception, "应用发生未处理异常，进程即将终止");
+                Serilog.Log.CloseAndFlush();
+            }
+            catch
+            {
+                // 日志系统本身不可用，忽略
+            }
+        };
+
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            try
+            {
+                Serilog.Log.Error(e.Exception, "后台任务出现未观察异常");
+            }
+            catch
+            {
+                // 忽略
+            }
+
+            e.SetObserved();
+        };
+
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            try
+            {
+                Serilog.Log.Error(e.Exception, "UI 线程未处理异常（已拦截，界面继续运行）");
+                NotifyUiException();
+            }
+            catch
+            {
+                // 忽略
+            }
+
+            e.Handled = true;
+        };
+    }
+
+    /// <summary>
+    /// 拦截 UI 异常后给用户一次可见反馈（限流 10 秒），避免功能「静默失效」而用户毫不知情。
+    /// </summary>
+    private static void NotifyUiException()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastUiExceptionNoticeAt < TimeSpan.FromSeconds(10))
+        {
+            return;
+        }
+
+        _lastUiExceptionNoticeAt = now;
+        ViewModelBase.ShowToast("界面操作出现异常，已记录日志，可继续使用。", NotificationType.Error);
+    }
+
+    /// <summary>
     /// 处理来自外部 CLI 进程或后台作业的状态变更通知，在 UI 线程实时刷新当前视图与主题。
     /// </summary>
     private static void HandleSyncMessage(IServiceProvider serviceProvider, SyncMessage msg)
@@ -102,6 +172,11 @@ public class App : Application
                     if (currentPage is SettingsViewModel settingsVm)
                     {
                         settingsVm.LoadSettingsCommand.Execute(null);
+                    }
+                    else if (currentPage is TaskEditorViewModel editorVm &&
+                             string.Equals(msg.Key, ScriptFormatterSettings.StorageKey, StringComparison.Ordinal))
+                    {
+                        _ = editorVm.RefreshFormatterAvailabilityAsync();
                     }
                     return;
                 }

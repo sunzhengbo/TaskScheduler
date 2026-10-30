@@ -50,6 +50,24 @@ public static class CliOutputFormatter
         AnsiConsole.MarkupLine($"[yellow]⚠ {Markup.Escape(message)}[/]");
     }
 
+    /// <summary>
+    /// 命令级错误输出：JSON 模式统一为 <c>{ success, error }</c> 契约，文本模式写 stderr，
+    /// 返回统一的「参数/前置条件错误」退出码 2，供各命令直接 <c>return</c>。
+    /// </summary>
+    public static int WriteCommandError(bool isJson, string message)
+    {
+        if (isJson)
+        {
+            WriteJson(new { success = false, error = message });
+        }
+        else
+        {
+            Console.Error.WriteLine(message);
+        }
+
+        return 2;
+    }
+
     public static void PrintInfo(string message)
     {
         AnsiConsole.MarkupLine($"[cyan]ℹ[/] {Markup.Escape(message)}");

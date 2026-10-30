@@ -33,10 +33,13 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     private readonly INavigationService _navigation;
     private readonly ILogger<TaskEditorViewModel> _logger;
     private readonly IToolConfigService _toolConfigService;
+    private readonly IScriptFormatterService _scriptFormatterService;
     private ScheduledTaskDetail? _editingTask;
     private IReadOnlyList<ToolConfig> _allTools = Array.Empty<ToolConfig>();
     private readonly TaskCompletionSource _toolsLoaded = new();
     private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _formatterCapabilityCts;
+    private int _formatterCapabilityRequest;
 
     [ObservableProperty] private string _taskName = string.Empty;
     [ObservableProperty] private string _group = "DEFAULT";
@@ -54,6 +57,15 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private bool _isSaving;
     [ObservableProperty] private string? _validationMessage;
     [ObservableProperty] private bool _isScriptContentMaximized;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFormatScript))]
+    private bool _isFormatting;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFormatScript))]
+    private bool _isFormatterAvailable;
+    [ObservableProperty] private string _formatterStatusMessage = "正在检查格式化工具…";
+
+    public bool CanFormatScript => IsInlineMode && IsFormatterAvailable && !IsFormatting;
 
     public string ScriptContentToggleHint => IsScriptContentMaximized ? "还原脚本编辑区" : "最大化脚本编辑区";
 
@@ -148,6 +160,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
 
     partial void OnIsInlineModeChanged(bool value)
     {
+        OnPropertyChanged(nameof(CanFormatScript));
         if (value)
         {
             if (IsFileMode) IsFileMode = false;
@@ -190,6 +203,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
             InlineScriptContent = GetCSharpStarterTemplate();
         }
         UpdateInterpreterVersions();
+        _ = RefreshFormatterAvailabilityAsync();
     }
 
     [ObservableProperty] private AvaloniaList<string> _availableCommandTypes = [];
@@ -200,6 +214,8 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     [ObservableProperty] private string? _interpreterWarningMessage;
     [ObservableProperty] private bool _hasInterpreterWarning;
     private string? _originalInterpreterName;
+
+    partial void OnEffectiveInterpreterPathChanged(string? value) => _ = RefreshFormatterAvailabilityAsync();
 
     public AvaloniaList<string> AvailableGroups { get; } = ["DEFAULT", "SYSTEM", "USER", "DAEMON"];
     public AvaloniaList<TaskPriority> AvailablePriorities { get; } = [TaskPriority.Low, TaskPriority.Normal, TaskPriority.High];
@@ -214,6 +230,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         INavigationService navigation,
         ILogger<TaskEditorViewModel> logger,
         IToolConfigService toolConfigService,
+        IScriptFormatterService scriptFormatterService,
         IInterpreterDetectionService? detectionService = null)
     {
         _taskService = taskService;
@@ -221,6 +238,7 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
         _navigation = navigation;
         _logger = logger;
         _toolConfigService = toolConfigService;
+        _scriptFormatterService = scriptFormatterService;
         _detectionService = detectionService ?? InterpreterDetectionService.Default;
 
         // 异步加载工具配置
@@ -231,6 +249,121 @@ public partial class TaskEditorViewModel : ViewModelBase, IParameterReceiver
     /// 重新加载解释器工具配置列表（供跨进程工具配置变更同步调用）。
     /// </summary>
     public Task ReloadToolsAsync() => LoadToolsAsync();
+
+    /// <summary>
+    /// Refreshes formatter availability after a tool or formatter setting changes.
+    /// </summary>
+    public Task RefreshFormatterAvailabilityAsync()
+    {
+        // 与 RefreshFallbackInterpreterPath 保持一致：旧令牌只取消、不立即释放。
+        // 立即 Dispose 会让仍在进行的探测（等待子进程退出等）在注册回调时抛 ObjectDisposedException。
+        var previousCts = _formatterCapabilityCts;
+        var capabilityCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        _formatterCapabilityCts = capabilityCts;
+        CancelQuietly(previousCts);
+
+        var requestId = Interlocked.Increment(ref _formatterCapabilityRequest);
+        return RefreshFormatterAvailabilityCoreAsync(requestId, capabilityCts);
+    }
+
+    /// <summary>
+    /// 取消令牌并忽略「已释放」异常，便于在并发刷新时安全取消上一个请求。
+    /// </summary>
+    private static void CancelQuietly(CancellationTokenSource? cts)
+    {
+        if (cts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 上一个请求已自行释放令牌，无需再取消
+        }
+    }
+
+    /// <summary>
+    /// Formats a captured editor buffer. The view applies the result so it can preserve caret and undo state.
+    /// </summary>
+    public async Task<ScriptFormatterResult> FormatScriptAsync(string source, CancellationToken ct = default)
+    {
+        if (!CanFormatScript)
+        {
+            return CreateFailure(FormatterStatusMessage.Length == 0 ? "当前格式化工具不可用。" : FormatterStatusMessage);
+        }
+
+        IsFormatting = true;
+        FormatterStatusMessage = "正在格式化…";
+        try
+        {
+            var result = await _scriptFormatterService.FormatAsync(
+                SelectedCommandType, source, EffectiveInterpreterPath, ct);
+            FormatterStatusMessage = result.Ok ? "格式化完成。" : result.Error ?? "格式化失败。";
+            return result;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            FormatterStatusMessage = "格式化已取消。";
+            return CreateFailure(FormatterStatusMessage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "脚本格式化失败: {CommandType}", SelectedCommandType);
+            FormatterStatusMessage = $"格式化失败：{ex.Message}";
+            return CreateFailure(FormatterStatusMessage);
+        }
+        finally
+        {
+            IsFormatting = false;
+        }
+    }
+
+    /// <summary>构造统一形态的失败结果，避免三处重复拼装同一对象。</summary>
+    private static ScriptFormatterResult CreateFailure(string message) => new(false, null, message, null, null);
+
+    /// <summary>Sets a view-level formatter message, such as a stale result discarded after further typing.</summary>
+    public void SetFormatterStatusMessage(string message) => FormatterStatusMessage = message;
+
+    private async Task RefreshFormatterAvailabilityCoreAsync(int requestId, CancellationTokenSource capabilityCts)
+    {
+        var ct = capabilityCts.Token;
+        IsFormatterAvailable = false;
+        FormatterStatusMessage = "正在检查格式化工具…";
+        try
+        {
+            var capability = await _scriptFormatterService.GetCapabilityAsync(SelectedCommandType, EffectiveInterpreterPath, ct);
+            if (requestId != _formatterCapabilityRequest || ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            IsFormatterAvailable = capability.Available;
+            FormatterStatusMessage = capability.Available
+                ? $"{capability.Tool} {capability.Version} 可用。"
+                : capability.Reason ?? $"{SelectedCommandType} 暂无可用格式化工具。";
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (requestId == _formatterCapabilityRequest)
+            {
+                _logger.LogWarning(ex, "检测脚本格式化工具失败: {CommandType}", SelectedCommandType);
+                FormatterStatusMessage = $"格式化工具检测失败：{ex.Message}";
+            }
+        }
+        finally
+        {
+            // 释放本次请求自己的令牌；若已被新请求替换则保留新值（新请求会自行取消旧令牌）
+            Interlocked.CompareExchange(ref _formatterCapabilityCts, null, capabilityCts);
+            capabilityCts.Dispose();
+        }
+    }
 
     /// <summary>
     /// 从 ToolConfigService 加载工具配置，动态构建可用的命令类型和解释器版本列表。
